@@ -9,6 +9,7 @@
 import Cocoa
 import IOKit.hid
 import ServiceManagement
+import UniformTypeIdentifiers
 
 // MARK: - Hành động
 
@@ -148,12 +149,31 @@ func log(_ s: String) {
     }
 }
 
+/// Cấu hình riêng cho từng app (khóa = bundle id, ví dụ "com.apple.Safari"), nằm trong khóa "apps" của file cấu hình.
+var appOverrides: [String: [String: Action]] = [:]
+var appDisabled: [String: Set<String>] = [:]     // nút bị tắt ("none") riêng trong app đó
+
 func loadMap() -> [String: Action] {
+    appOverrides = [:]; appDisabled = [:]
     var specs: [String: String] = [:]
     for (k, v) in defaultMap { specs[normalizeKey(k)] = v }
     if let data = FileManager.default.contents(atPath: configPath) {
         if let user = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            for (k, v) in user { specs[normalizeKey(k)] = "\(v)" }
+            for (k, v) in user {
+                if k == "apps" {
+                    for (bid, d) in (v as? [String: Any]) ?? [:] {
+                        for (kk, vv) in (d as? [String: Any]) ?? [:] {
+                            let key = normalizeKey(kk), spec = "\(vv)"
+                            if key == "HOLDTIME" || key == "DOUBLETIME" { continue }
+                            if spec.isEmpty || spec == "none" { appDisabled[bid, default: []].insert(key); continue }
+                            if let a = Action.parse(spec) { appOverrides[bid, default: [:]][key] = a }
+                            else { log("Hành động không hợp lệ trong \(bid): \(kk) → \(spec)") }
+                        }
+                    }
+                    continue
+                }
+                specs[normalizeKey(k)] = "\(v)"
+            }
         } else {
             log("File cấu hình sai định dạng, dùng mặc định")
         }
@@ -220,6 +240,15 @@ final class Controller {
 
     func reloadMap() { map = loadMap() }
 
+    /// Hành động của nút: ưu tiên cấu hình riêng của app đang ở trên cùng, nếu không có thì dùng cấu hình mặc định.
+    private func action(for key: String) -> Action? {
+        if let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
+            if appDisabled[bid]?.contains(key) == true { return nil }
+            if let a = appOverrides[bid]?[key] { return a }
+        }
+        return map[key]
+    }
+
     private func close(_ d: IOHIDDevice) {
         IOHIDDeviceUnscheduleFromRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDDeviceClose(d, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -249,9 +278,9 @@ final class Controller {
         let key = String(format: "%02X:%04X", IOHIDElementGetUsagePage(el), IOHIDElementGetUsage(el))
         let down = IOHIDValueGetIntegerValue(value) != 0
         if debugLog { log("BUTTON \(key) (\(buttonNames.first { $0.value == key }?.key ?? "?")) \(down ? "down" : "up")") }
-        let tap = map[key]
-        let hold = map[key + "+HOLD"]
-        let dbl = map[key + "+DOUBLE"]
+        let tap = action(for: key)
+        let hold = action(for: key + "+HOLD")
+        let dbl = action(for: key + "+DOUBLE")
         guard tap != nil || hold != nil || dbl != nil, seize || !systemHandledKeys.contains(key) else { return }
 
         // Nút có hành động "giữ" hoặc "nhấn đúp": bấm nhanh được xử lý khi THẢ nút.
@@ -357,6 +386,355 @@ func onValue(_ c: UnsafeMutableRawPointer?, _ r: IOReturn, _ s: UnsafeMutableRaw
     controller.handle(v)
 }
 
+// MARK: - Tệp cấu hình (dùng cho giao diện)
+
+func canonicalKey(_ raw: String) -> String {
+    let n = normalizeKey(raw)
+    var base = n, suffix = ""
+    for sfx in ["+HOLD", "+DOUBLE"] where n.hasSuffix(sfx) {
+        base = String(n.dropLast(sfx.count)); suffix = sfx.lowercased(); break
+    }
+    if let name = buttonNames.first(where: { $0.value == base })?.key { return name + suffix }
+    return raw.trimmingCharacters(in: .whitespaces).lowercased()
+}
+
+struct ConfigFile {
+    var global: [String: String] = [:]
+    var apps: [String: [String: String]] = [:]
+
+    static func load() -> ConfigFile {
+        var c = ConfigFile()
+        for (k, v) in defaultMap { c.global[canonicalKey(k)] = v }
+        if let data = FileManager.default.contents(atPath: configPath),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for (k, v) in obj {
+                if k == "apps" {
+                    for (bid, d) in (v as? [String: Any]) ?? [:] {
+                        var m: [String: String] = [:]
+                        for (kk, vv) in (d as? [String: Any]) ?? [:] { m[canonicalKey(kk)] = "\(vv)" }
+                        c.apps[bid] = m
+                    }
+                } else {
+                    c.global[canonicalKey(k)] = "\(v)"
+                }
+            }
+        }
+        return c
+    }
+
+    func save() {
+        var dict: [String: Any] = global
+        if !apps.isEmpty { dict["apps"] = apps }
+        guard let d = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) else { return }
+        try? d.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+    }
+}
+
+// MARK: - Cửa sổ cài đặt
+
+final class SettingsWindow: NSObject, NSWindowDelegate {
+    private let window: NSWindow
+    private var cfg = ConfigFile.load()
+    private var current: String?            // nil = cấu hình mặc định; ngược lại = bundle id của app
+    private let profilePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let removeButton = NSButton(title: "Xóa app này", target: nil, action: nil)
+    private let gridHost = NSStackView()
+    private var centered = false
+
+    private let rows: [(String, String)] = [
+        ("touchpad", "Touchpad"), ("menu", "Menu"), ("home", "Home"), ("siri", "Siri"),
+        ("playpause", "Play/Pause"), ("volup", "Vol +"), ("voldown", "Vol −"),
+    ]
+    private let presets: [(String, String)] = [
+        ("media:playpause", "Phát / Dừng"), ("media:next", "Bài kế tiếp"), ("media:previous", "Bài trước"),
+        ("media:fast", "Tua tới"), ("media:rewind", "Tua lui"),
+        ("media:volumeup", "Tăng âm lượng"), ("media:volumedown", "Giảm âm lượng"), ("media:mute", "Tắt tiếng"),
+        ("click", "Click chuột"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống"),
+        ("key:left", "Phím ←"), ("key:right", "Phím →"), ("key:up", "Phím ↑"), ("key:down", "Phím ↓"),
+        ("key:space", "Phím Space"), ("key:return", "Phím Enter"), ("key:escape", "Phím Esc"),
+        ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
+        ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
+    ]
+
+    override init() {
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+                          styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+        super.init()
+        window.title = "SiriRemoteMac – Cài đặt nút"
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+
+        let container = NSView()
+        window.contentView = container
+
+        let profileLabel = NSTextField(labelWithString: "Áp dụng cho:")
+        profilePopup.target = self; profilePopup.action = #selector(profileChanged(_:))
+        profilePopup.widthAnchor.constraint(equalToConstant: 230).isActive = true
+        let addButton = NSButton(title: "＋ Thêm app", target: self, action: #selector(addApp(_:)))
+        removeButton.target = self; removeButton.action = #selector(removeApp)
+        let top = NSStackView(views: [profileLabel, profilePopup, addButton, removeButton])
+        top.orientation = .horizontal; top.spacing = 10
+
+        gridHost.orientation = .vertical; gridHost.alignment = .leading; gridHost.spacing = 14
+
+        let footer = NSTextField(wrappingLabelWithString:
+            "Thay đổi được lưu tự động vào ~/.siriremote.json. Mỗi app có thể ghi đè cấu hình mặc định; nút nào để “Giống mặc định” sẽ dùng cấu hình chung. Cấu hình áp dụng theo app đang ở trên cùng.")
+        footer.textColor = .secondaryLabelColor
+        footer.font = .systemFont(ofSize: 11)
+        footer.preferredMaxLayoutWidth = 600
+
+        let root = NSStackView(views: [top, gridHost, footer])
+        root.orientation = .vertical; root.alignment = .leading; root.spacing = 18
+        root.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
+            root.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            root.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+        ])
+    }
+
+    func show() {
+        cfg = ConfigFile.load()
+        if let c = current, cfg.apps[c] == nil { current = nil }
+        reload()
+        if !centered { window.center(); centered = true }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: Dựng giao diện
+
+    private func appName(_ bid: String) -> String {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) {
+            return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        }
+        return bid
+    }
+
+    private func label(for spec: String?) -> String {
+        guard let spec = spec, spec != "none", !spec.isEmpty else { return "Không làm gì" }
+        if let p = presets.first(where: { $0.0 == spec }) { return p.1 }
+        if spec.hasPrefix("app:") { return "Mở " + String(spec.dropFirst(4)) }
+        if spec.hasPrefix("key:") { return "Phím " + String(spec.dropFirst(4)) }
+        return spec
+    }
+
+    private func reload() {
+        profilePopup.removeAllItems()
+        let def = NSMenuItem(title: "Mặc định (mọi app)", action: nil, keyEquivalent: "")
+        def.representedObject = ""
+        profilePopup.menu?.addItem(def)
+        for bid in cfg.apps.keys.sorted(by: { appName($0).localizedCaseInsensitiveCompare(appName($1)) == .orderedAscending }) {
+            let mi = NSMenuItem(title: appName(bid), action: nil, keyEquivalent: "")
+            mi.representedObject = bid
+            profilePopup.menu?.addItem(mi)
+        }
+        if let i = profilePopup.itemArray.firstIndex(where: { ($0.representedObject as? String) == (current ?? "") }) {
+            profilePopup.selectItem(at: i)
+        }
+        removeButton.isEnabled = current != nil
+        rebuildGrid()
+    }
+
+    private func rebuildGrid() {
+        for v in gridHost.arrangedSubviews { gridHost.removeArrangedSubview(v); v.removeFromSuperview() }
+
+        func header(_ t: String) -> NSTextField {
+            let f = NSTextField(labelWithString: t); f.font = .boldSystemFont(ofSize: 12); return f
+        }
+        var gridRows: [[NSView]] = [[header("Nút"), header("Bấm"), header("Giữ"), header("Nhấn đúp")]]
+        for (name, title) in rows {
+            gridRows.append([NSTextField(labelWithString: title),
+                             makePopup(name), makePopup(name + "+hold"), makePopup(name + "+double")])
+        }
+        let grid = NSGridView(views: gridRows)
+        grid.columnSpacing = 12; grid.rowSpacing = 8
+        gridHost.addArrangedSubview(grid)
+
+        if current == nil {
+            func field(_ id: String, _ fallback: String) -> NSTextField {
+                let f = NSTextField(string: cfg.global[id] ?? fallback)
+                f.identifier = NSUserInterfaceItemIdentifier(id)
+                f.target = self; f.action = #selector(timeChanged(_:))
+                (f.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true
+                f.widthAnchor.constraint(equalToConstant: 56).isActive = true
+                return f
+            }
+            let t = NSStackView(views: [
+                NSTextField(labelWithString: "Thời gian giữ nút (giây):"), field("holdtime", "0.8"),
+                NSTextField(labelWithString: "   Khoảng cách nhấn đúp (giây):"), field("doubletime", "0.3"),
+            ])
+            t.orientation = .horizontal; t.spacing = 6
+            gridHost.addArrangedSubview(t)
+        }
+    }
+
+    private func makePopup(_ key: String) -> NSPopUpButton {
+        let p = NSPopUpButton(frame: .zero, pullsDown: false)
+        p.identifier = NSUserInterfaceItemIdentifier(key)
+        p.target = self; p.action = #selector(actionChanged(_:))
+        p.widthAnchor.constraint(equalToConstant: 160).isActive = true
+
+        func add(_ title: String, _ rep: String) {
+            let mi = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            mi.representedObject = rep
+            p.menu?.addItem(mi)
+        }
+        if current != nil { add("Giống mặc định: " + label(for: cfg.global[key]), "@inherit") }
+        add("Không làm gì", "none")
+        p.menu?.addItem(.separator())
+        for (spec, title) in presets { add(title, spec) }
+        p.menu?.addItem(.separator())
+        add("Mở ứng dụng…", "@app")
+        add("Phím tắt…", "@key")
+
+        let cur: String? = current == nil ? (cfg.global[key] ?? "none") : cfg.apps[current!]?[key]
+        if let cur = cur {
+            if let i = p.itemArray.firstIndex(where: { ($0.representedObject as? String) == cur }) {
+                p.selectItem(at: i)
+            } else {
+                let mi = NSMenuItem(title: label(for: cur), action: nil, keyEquivalent: "")
+                mi.representedObject = cur
+                p.menu?.insertItem(mi, at: current != nil ? 1 : 0)
+                p.select(mi)
+            }
+        } else {
+            p.selectItem(at: 0)     // “Giống mặc định”
+        }
+        return p
+    }
+
+    // MARK: Thao tác
+
+    @objc private func profileChanged(_ sender: NSPopUpButton) {
+        let rep = (sender.selectedItem?.representedObject as? String) ?? ""
+        current = rep.isEmpty ? nil : rep
+        reload()
+    }
+
+    @objc private func actionChanged(_ sender: NSPopUpButton) {
+        guard let key = sender.identifier?.rawValue,
+              let rep = sender.selectedItem?.representedObject as? String else { return }
+        var value: String? = rep
+        switch rep {
+        case "@inherit": value = nil
+        case "@app":
+            guard let name = pickApp() else { rebuildGrid(); return }
+            value = "app:" + name
+        case "@key":
+            guard let k = promptKey() else { rebuildGrid(); return }
+            value = "key:" + k
+        default: break
+        }
+        if let bid = current {
+            if let v = value { cfg.apps[bid, default: [:]][key] = v } else { cfg.apps[bid]?[key] = nil }
+        } else if let v = value {
+            if v == "none" && defaultMap[key] == nil { cfg.global[key] = nil } else { cfg.global[key] = v }
+        }
+        commit()
+    }
+
+    @objc private func timeChanged(_ sender: NSTextField) {
+        guard let id = sender.identifier?.rawValue else { return }
+        let text = sender.stringValue.replacingOccurrences(of: ",", with: ".")
+        let range = id == "holdtime" ? 0.2...3.0 : 0.15...1.0
+        if let v = Double(text) {
+            cfg.global[id] = String(format: "%.2f", min(max(v, range.lowerBound), range.upperBound))
+        }
+        commit()
+    }
+
+    private func commit() {
+        cfg.save()
+        controller.reloadMap()
+        rebuildGrid()
+    }
+
+    @objc private func addApp(_ sender: NSButton) {
+        let menu = NSMenu()
+        let running = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && $0.bundleIdentifier != nil
+                && $0.bundleIdentifier != Bundle.main.bundleIdentifier && cfg.apps[$0.bundleIdentifier!] == nil
+        }.sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
+        for a in running {
+            let mi = NSMenuItem(title: a.localizedName ?? a.bundleIdentifier!, action: #selector(addRunning(_:)), keyEquivalent: "")
+            mi.target = self
+            mi.representedObject = a.bundleIdentifier
+            if let icon = a.icon?.copy() as? NSImage { icon.size = NSSize(width: 16, height: 16); mi.image = icon }
+            menu.addItem(mi)
+        }
+        if !running.isEmpty { menu.addItem(.separator()) }
+        let disk = NSMenuItem(title: "Chọn từ thư mục Applications…", action: #selector(addFromDisk), keyEquivalent: "")
+        disk.target = self
+        menu.addItem(disk)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height), in: sender)
+    }
+
+    @objc private func addRunning(_ sender: NSMenuItem) {
+        if let bid = sender.representedObject as? String { addProfile(bid) }
+    }
+
+    @objc private func addFromDisk() {
+        guard let url = chooseApp(), let bid = Bundle(url: url)?.bundleIdentifier else { return }
+        addProfile(bid)
+    }
+
+    private func addProfile(_ bid: String) {
+        if cfg.apps[bid] == nil { cfg.apps[bid] = [:] }
+        current = bid
+        cfg.save()
+        controller.reloadMap()
+        reload()
+    }
+
+    @objc private func removeApp() {
+        guard let bid = current else { return }
+        let a = NSAlert()
+        a.messageText = "Xóa cấu hình riêng của \(appName(bid))?"
+        a.addButton(withTitle: "Xóa"); a.addButton(withTitle: "Hủy")
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+        cfg.apps[bid] = nil
+        current = nil
+        cfg.save()
+        controller.reloadMap()
+        reload()
+    }
+
+    private func chooseApp() -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    private func pickApp() -> String? {
+        chooseApp()?.deletingPathExtension().lastPathComponent
+    }
+
+    private func promptKey() -> String? {
+        let a = NSAlert()
+        a.messageText = "Nhập phím tắt"
+        a.informativeText = "Ví dụ: cmd+w, cmd+shift+4, ctrl+right, space. Phím bổ trợ: cmd, ctrl, alt, shift."
+        let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        a.accessoryView = f
+        a.addButton(withTitle: "OK"); a.addButton(withTitle: "Hủy")
+        a.window.initialFirstResponder = f
+        guard a.runModal() == .alertFirstButtonReturn else { return nil }
+        let text = f.stringValue.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !text.isEmpty else { return nil }
+        guard Action.parse("key:" + text) != nil else {
+            let e = NSAlert()
+            e.messageText = "Phím không hợp lệ: \(text)"
+            e.runModal()
+            return nil
+        }
+        return text
+    }
+}
+
 // MARK: - Thanh menu
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -383,7 +761,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem.title = "Khởi động cùng macOS"; loginItem.action = #selector(toggleLogin); loginItem.target = self
 
         let menu = NSMenu()
-        for m in [statusLine, .separator(), loginItem, seizeItem, debugItem, .separator(),
+        for m in [statusLine, .separator(),
+                  entry("Cài đặt nút…", #selector(openSettings), key: ","), .separator(),
+                  loginItem, seizeItem, debugItem, .separator(),
                   entry("Mở file cấu hình nút", #selector(openConfig)),
                   entry("Nạp lại cấu hình", #selector(reload)),
                   entry("Mở file log", #selector(openLog)), .separator(),
@@ -391,6 +771,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(m)
         }
         item.menu = menu
+
+        // Menu chính tối thiểu để Cmd+C / Cmd+V hoạt động trong ô nhập của cửa sổ cài đặt.
+        let mainMenu = NSMenu(), editHost = NSMenuItem(), edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editHost.submenu = edit
+        mainMenu.addItem(editHost)
+        NSApp.mainMenu = mainMenu
 
         if !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary) {
             log("Chưa có quyền Accessibility")
@@ -453,6 +843,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             a.runModal()
         }
         refresh()
+    }
+    private var settingsWindow: SettingsWindow?
+    @objc private func openSettings() {
+        if settingsWindow == nil { settingsWindow = SettingsWindow() }
+        settingsWindow?.show()
     }
     @objc private func quit() { controller.stop(); NSApp.terminate(nil) }
     @objc private func reload() { controller.reloadMap() }

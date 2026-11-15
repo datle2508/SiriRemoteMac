@@ -30,7 +30,14 @@ Tắt Apple TV (hoặc rút nguồn) để remote không tự nối lại với 
 ### Khởi động cùng macOS
 Menu 🎛 → **Khởi động cùng macOS** (chỉ khi chạy từ `.app`).
 
-## Cấu hình nút
+## Cài đặt bằng giao diện
+
+Menu 🎛 → **Cài đặt nút…** (⌘,). Chọn nút, chọn hành động cho *Bấm / Giữ / Nhấn đúp* từ danh sách (hoặc *Mở ứng dụng…*, *Phím tắt…* để tự đặt). Thay đổi được lưu ngay vào `~/.siriremote.json`.
+
+**Cấu hình riêng cho từng app:** ở ô *Áp dụng cho*, bấm **＋ Thêm app** (chọn app đang chạy hoặc từ thư mục Applications). Khi app đó đang ở trên cùng, các nút được cấu hình riêng sẽ thay cho mặc định; nút để *Giống mặc định* vẫn dùng cấu hình chung. Ví dụ: Keynote dùng ← → để chuyển slide, YouTube Music dùng Menu/Home chuyển bài.
+
+## Cấu hình bằng file JSON
+
 
 File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** làm khóa:
 
@@ -68,6 +75,17 @@ File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** 
 | `none` | Tắt hành động mặc định của nút |
 
 **Thời gian:** `holdtime` (giây, 0.2–3.0, mặc định 0.8), `doubletime` (giây, 0.15–1.0, mặc định 0.3). Nút có `+double` sẽ chạy bấm nhanh trễ khoảng `doubletime`.
+
+Cấu hình riêng cho từng app nằm trong khóa `apps` (khóa con là bundle id của app, dùng được `none` để tắt một nút trong app đó):
+
+```json
+{
+  "home": "media:next",
+  "apps": {
+    "com.apple.iWork.Keynote": { "home": "key:right", "menu": "key:left" }
+  }
+}
+```
 
 Cấu hình của bạn được **gộp** lên mặc định; dùng `"none"` để tắt một nút mặc định. Sau khi sửa, chọn **Nạp lại cấu hình** trong menu 🎛.
 
