@@ -116,6 +116,12 @@ let defaultMap: [String: String] = [
     "playpause": "media:playpause",
     "volup": "media:volumeup",
     "voldown": "media:volumedown",
+    "touchmode": "cursor",          // cảm ứng: cursor (con trỏ + cuộn + vuốt), swipe (chỉ vuốt/chạm), off
+    "touchspeed": "1.5",            // tốc độ con trỏ (0.3 – 5)
+    "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
+    "naturalscroll": "1",           // 1 = cuộn tự nhiên (đảo chiều), 0 = ngược lại
+    "tapclick": "0",                // 1 = chạm nhẹ để click
+    "touchfamily": "145",           // mã họ thiết bị MultitouchSupport của remote (xem log khi bật "Ghi log")
     "doubletime": "0.3",            // số giây tối đa giữa 2 lần nhấn để tính là nhấn đúp (0.15 – 1.0)
     "holdtime": "0.8",              // số giây giữ nút để tính là "giữ" (0.2 – 3.0)
 ]
@@ -139,6 +145,15 @@ let logPath = NSHomeDirectory() + "/Library/Logs/SiriRemoteMac.log"
 var debugLog = false
 var holdDelaySeconds: TimeInterval = 0.8   // đổi bằng khóa "holdtime" trong file cấu hình
 var doubleDelaySeconds: TimeInterval = 0.3 // khoảng cách tối đa giữa hai lần nhấn đúp, khóa "doubletime"
+
+enum TouchMode: String { case off, cursor, swipe }
+var touchMode: TouchMode = .cursor
+var touchSpeed = 1.5
+var scrollSpeed = 1.0
+var naturalScroll = true
+var tapClick = false
+var touchFamily: Int32 = 145
+var mouseButtonDown = false      // Controller đặt khi nút touchpad đang được nhấn (để kéo thả bằng cảm ứng)
 
 func log(_ s: String) {
     guard let data = "\(Date()) \(s)\n".data(using: .utf8) else { return }
@@ -164,7 +179,7 @@ func loadMap() -> [String: Action] {
                     for (bid, d) in (v as? [String: Any]) ?? [:] {
                         for (kk, vv) in (d as? [String: Any]) ?? [:] {
                             let key = normalizeKey(kk), spec = "\(vv)"
-                            if key == "HOLDTIME" || key == "DOUBLETIME" { continue }
+                            if ["HOLDTIME", "DOUBLETIME", "TOUCHMODE", "TOUCHSPEED", "SCROLLSPEED", "NATURALSCROLL", "TAPCLICK", "TOUCHFAMILY"].contains(key) { continue }
                             if spec.isEmpty || spec == "none" { appDisabled[bid, default: []].insert(key); continue }
                             if let a = Action.parse(spec) { appOverrides[bid, default: [:]][key] = a }
                             else { log("Hành động không hợp lệ trong \(bid): \(kk) → \(spec)") }
@@ -186,12 +201,235 @@ func loadMap() -> [String: Action] {
     if let h = specs.removeValue(forKey: "HOLDTIME") {
         if let t = Double(h) { holdDelaySeconds = min(max(t, 0.2), 3.0) } else { log("holdtime không hợp lệ: \(h)") }
     }
+    func take(_ k: String) -> String? { specs.removeValue(forKey: k) }
+    if let v = take("TOUCHMODE") { touchMode = TouchMode(rawValue: v.lowercased()) ?? .cursor }
+    if let v = take("TOUCHSPEED"), let d = Double(v) { touchSpeed = min(max(d, 0.3), 5.0) }
+    if let v = take("SCROLLSPEED"), let d = Double(v) { scrollSpeed = min(max(d, 0.2), 4.0) }
+    if let v = take("NATURALSCROLL") { naturalScroll = !(v == "0" || v.lowercased() == "false") }
+    if let v = take("TAPCLICK") { tapClick = (v == "1" || v.lowercased() == "true") }
+    if let v = take("TOUCHFAMILY"), let n = Int32(v) { touchFamily = n }
     var map: [String: Action] = [:]
     for (k, v) in specs {
         if v.isEmpty || v == "none" { continue }   // "none": tắt hành động mặc định của nút này
         if let a = Action.parse(v) { map[k] = a } else { log("Hành động không hợp lệ: \(k) → \(v)") }
     }
     return map
+}
+
+// MARK: - Cảm ứng (MultitouchSupport, framework riêng của Apple)
+
+struct MTPoint { var x: Float; var y: Float }
+struct MTVector { var pos: MTPoint; var vel: MTPoint }
+struct MTTouch {
+    var frame: Int32
+    var timestamp: Double
+    var identifier: Int32
+    var state: Int32
+    var fingerId: Int32
+    var handId: Int32
+    var normalized: MTVector
+    var size: Float
+    var pressure: Int32
+    var angle: Float
+    var majorAxis: Float
+    var minorAxis: Float
+    var absoluteVector: MTVector
+    var unknown1: Int32
+    var unknown2: Int32
+    var density: Float
+}
+
+struct TouchPoint { var id: Int32; var x: Float; var y: Float; var state: Int32 }
+
+typealias MTContactCB = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, Double, Int32) -> Void
+typealias MTFnList = @convention(c) () -> UnsafeRawPointer?
+typealias MTFnReg = @convention(c) (UnsafeMutableRawPointer, MTContactCB) -> Void
+typealias MTFnUnreg = @convention(c) (UnsafeMutableRawPointer, MTContactCB) -> Void
+typealias MTFnStart = @convention(c) (UnsafeMutableRawPointer, Int32) -> Void
+typealias MTFnStop = @convention(c) (UnsafeMutableRawPointer) -> Void
+typealias MTFnFamily = @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<Int32>) -> Int32
+
+/// Chạy trên luồng riêng của MultitouchSupport: chỉ sao chép dữ liệu rồi chuyển sang luồng chính.
+func touchCallbackFn(_ dev: UnsafeMutableRawPointer?, _ raw: UnsafeMutableRawPointer?, _ n: Int32, _ ts: Double, _ frame: Int32) {
+    var list: [TouchPoint] = []
+    if let raw = raw, n > 0 {
+        let t = raw.assumingMemoryBound(to: MTTouch.self)
+        for i in 0..<Int(n) {
+            list.append(TouchPoint(id: t[i].identifier, x: t[i].normalized.pos.x, y: t[i].normalized.pos.y, state: t[i].state))
+        }
+    }
+    DispatchQueue.main.async { touchEngine.process(list, timestamp: ts) }
+}
+let touchCallback: MTContactCB = touchCallbackFn
+
+final class TouchEngine {
+    private var lib: UnsafeMutableRawPointer?
+    private var deviceList: CFArray?
+    private var devices: [UnsafeMutableRawPointer] = []
+    private var runningMode: TouchMode = .off
+    private var runningFamily: Int32 = -1
+
+    // Trạng thái cử chỉ
+    private var inSession = false
+    private var startTime = 0.0
+    private var lastCentroid = (x: Float(0), y: Float(0))
+    private var startCentroid = (x: Float(0), y: Float(0))
+    private var lastCount = 0
+    private var maxFingers = 0
+    private var travel: Float = 0
+    private var scrollRemX: Float = 0
+    private var scrollRemY: Float = 0
+
+    var isRunning: Bool { !devices.isEmpty }
+
+    /// force = false: bỏ qua nếu đang chạy đúng cấu hình.
+    func start(force: Bool) {
+        if !force && isRunning && runningMode == touchMode && runningFamily == touchFamily { return }
+        stop()
+        guard touchMode != .off else { return }
+        if lib == nil { lib = dlopen("/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport", RTLD_NOW) }
+        guard let h = lib else { log("Không nạp được MultitouchSupport"); return }
+        guard let sList = dlsym(h, "MTDeviceCreateList"), let sReg = dlsym(h, "MTRegisterContactFrameCallback"),
+              let sStart = dlsym(h, "MTDeviceStart") else { log("MultitouchSupport thiếu hàm cần dùng"); return }
+        let fam: MTFnFamily? = dlsym(h, "MTDeviceGetFamilyID").map { unsafeBitCast($0, to: MTFnFamily.self) }
+        guard let raw = unsafeBitCast(sList, to: MTFnList.self)() else { return }
+        let arr = Unmanaged<CFArray>.fromOpaque(raw).takeRetainedValue()
+        deviceList = arr
+        var found: [UnsafeMutableRawPointer] = []
+        for i in 0..<CFArrayGetCount(arr) {
+            guard let p = CFArrayGetValueAtIndex(arr, i) else { continue }
+            let dev = UnsafeMutableRawPointer(mutating: p)
+            var f: Int32 = -1
+            _ = fam?(dev, &f)
+            if debugLog { log("MT thiết bị #\(i) family=\(f)\(f == touchFamily ? " ← dùng" : "")") }
+            if f == touchFamily { found.append(dev) }
+        }
+        let reg = unsafeBitCast(sReg, to: MTFnReg.self)
+        let startFn = unsafeBitCast(sStart, to: MTFnStart.self)
+        for dev in found { reg(dev, touchCallback); startFn(dev, 0) }
+        devices = found
+        runningMode = touchMode
+        runningFamily = touchFamily
+        if debugLog { log("Cảm ứng: bắt đầu với \(found.count) thiết bị, chế độ \(touchMode.rawValue)") }
+    }
+
+    func stop() {
+        if let h = lib {
+            let unreg = dlsym(h, "MTUnregisterContactFrameCallback").map { unsafeBitCast($0, to: MTFnUnreg.self) }
+            let stopFn = dlsym(h, "MTDeviceStop").map { unsafeBitCast($0, to: MTFnStop.self) }
+            for dev in devices { unreg?(dev, touchCallback); stopFn?(dev) }
+        }
+        devices.removeAll()
+        deviceList = nil
+        runningMode = .off
+        inSession = false
+        lastCount = 0
+    }
+
+    // MARK: Xử lý khung hình
+
+    func process(_ pts: [TouchPoint], timestamp: Double) {
+        guard isRunning else { return }
+        let active = pts.filter { $0.state == 3 || $0.state == 4 }
+        if active.isEmpty {
+            if inSession { endSession(timestamp) }
+            return
+        }
+        let n = Float(active.count)
+        let c = (x: active.reduce(0) { $0 + $1.x } / n, y: active.reduce(0) { $0 + $1.y } / n)
+        if !inSession {
+            inSession = true
+            startTime = timestamp; startCentroid = c; lastCentroid = c
+            maxFingers = active.count; lastCount = active.count; travel = 0
+            scrollRemX = 0; scrollRemY = 0
+            return
+        }
+        maxFingers = max(maxFingers, active.count)
+        if active.count != lastCount { lastCentroid = c; lastCount = active.count; return }  // tránh nhảy khi đổi số ngón
+        let dx = c.x - lastCentroid.x, dy = c.y - lastCentroid.y
+        travel += hypotf(dx, dy)
+        lastCentroid = c
+        guard touchMode == .cursor else { return }
+        if active.count == 1 { moveCursor(dx, dy) } else { scroll(dx, dy) }
+    }
+
+    private func endSession(_ ts: Double) {
+        inSession = false
+        lastCount = 0
+        let dur = ts - startTime
+        let dx = lastCentroid.x - startCentroid.x, dy = lastCentroid.y - startCentroid.y
+        let fingers = maxFingers
+        if debugLog { log("TOUCH kết thúc: ngón=\(fingers) dx=\(dx) dy=\(dy) thời gian=\(dur) quãng=\(travel)") }
+        if fingers == 1 {
+            let minDist: Float = touchMode == .cursor ? 0.35 : 0.2
+            let maxTime = touchMode == .cursor ? 0.35 : 0.7
+            let adx = abs(dx), ady = abs(dy)
+            if dur < maxTime, max(adx, ady) >= minDist, max(adx, ady) >= 2 * min(adx, ady) {
+                let key = adx > ady ? (dx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (dy > 0 ? "SWIPEUP" : "SWIPEDOWN")
+                fire(key)
+                return
+            }
+            if tapClick, dur < 0.25, travel < 0.04 { click() }
+        } else if fingers == 2, dur < 0.25, travel < 0.06 {
+            fire("TWOFINGERTAP")
+        }
+    }
+
+    // MARK: Hành động
+
+    private func fire(_ key: String) {
+        guard let a = controller.action(for: key) else { return }
+        switch a {
+        case .click: click()
+        case .scroll(let dir):
+            CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1,
+                    wheel1: dir * 300, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
+        default: a.run()
+        }
+    }
+
+    private func click() {
+        let pos = CGEvent(source: nil)?.location ?? .zero
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+    }
+
+    private func screenBounds() -> CGRect {
+        var count: UInt32 = 0
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+        CGGetActiveDisplayList(16, &ids, &count)
+        var r = CGRect.null
+        for i in 0..<Int(count) { r = r.union(CGDisplayBounds(ids[i])) }
+        return r
+    }
+
+    private func moveCursor(_ dx: Float, _ dy: Float) {
+        let d = Double(hypotf(dx, dy))
+        let k = touchSpeed * (1.0 + min(d * 20.0, 2.0)) * 1400.0     // điểm ảnh trên một đơn vị chuẩn hóa
+        var pos = CGEvent(source: nil)?.location ?? .zero
+        pos.x += Double(dx) * k
+        pos.y -= Double(dy) * k                                     // trục y của cảm ứng hướng lên
+        let b = screenBounds()
+        if !b.isNull {
+            pos.x = min(max(pos.x, b.minX), b.maxX - 1)
+            pos.y = min(max(pos.y, b.minY), b.maxY - 1)
+        }
+        let type: CGEventType = mouseButtonDown ? .leftMouseDragged : .mouseMoved
+        CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
+    }
+
+    private func scroll(_ dx: Float, _ dy: Float) {
+        let sign: Float = naturalScroll ? -1 : 1
+        let k = Float(scrollSpeed) * 1500
+        scrollRemY += dy * k * sign
+        scrollRemX += dx * k * -sign
+        let v = Int32(scrollRemY), h = Int32(scrollRemX)
+        guard v != 0 || h != 0 else { return }
+        scrollRemY -= Float(v); scrollRemX -= Float(h)
+        CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+                wheel1: v, wheel2: h, wheel3: 0)?.post(tap: .cghidEventTap)
+    }
 }
 
 // MARK: - Bộ điều khiển
@@ -238,10 +476,10 @@ final class Controller {
         manager = nil
     }
 
-    func reloadMap() { map = loadMap() }
+    func reloadMap() { map = loadMap(); touchEngine.start(force: false) }
 
     /// Hành động của nút: ưu tiên cấu hình riêng của app đang ở trên cùng, nếu không có thì dùng cấu hình mặc định.
-    private func action(for key: String) -> Action? {
+    func action(for key: String) -> Action? {
         if let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
             if appDisabled[bid]?.contains(key) == true { return nil }
             if let a = appOverrides[bid]?[key] { return a }
@@ -263,11 +501,17 @@ final class Controller {
         IOHIDDeviceScheduleWithRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         remotes.append(d)
         DispatchQueue.main.async { appDelegate.refresh() }
+        // Thiết bị cảm ứng xuất hiện chậm hơn nút bấm một chút: thử nạp lại vài lần.
+        for delay in [1.0, 3.0, 6.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { touchEngine.start(force: false) }
+        }
     }
 
     func removed(_ d: IOHIDDevice) {
         guard let i = remotes.firstIndex(where: { $0 === d }) else { return }
         remotes.remove(at: i)
+        mouseButtonDown = false
+        touchEngine.stop()
         setScroll(0)
         stopSeek()
         DispatchQueue.main.async { appDelegate.refresh() }
@@ -353,7 +597,8 @@ final class Controller {
         if let k = seekKey { postMediaRaw(k, down: false, isRepeat: false); seekKey = nil }
     }
 
-    private func mouse(down: Bool) {
+    func mouse(down: Bool) {
+        mouseButtonDown = down
         let pos = CGEvent(source: nil)?.location ?? .zero
         CGEvent(mouseEventSource: nil, mouseType: down ? .leftMouseDown : .leftMouseUp,
                 mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
@@ -374,6 +619,7 @@ final class Controller {
 }
 
 let controller = Controller()
+let touchEngine = TouchEngine()
 
 // Callback kiểu C: chỉ chuyển tiếp sang controller.
 func onDeviceAdded(_ c: UnsafeMutableRawPointer?, _ r: IOReturn, _ s: UnsafeMutableRawPointer?, _ d: IOHIDDevice) {
@@ -438,12 +684,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var current: String?            // nil = cấu hình mặc định; ngược lại = bundle id của app
     private let profilePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let removeButton = NSButton(title: "Xóa app này", target: nil, action: nil)
-    private let gridHost = NSStackView()
+    private let gridHost = NSStackView()       // tab "Nút bấm"
+    private let touchHost = NSStackView()      // tab "Cảm ứng"
     private var centered = false
 
     private let rows: [(String, String)] = [
         ("touchpad", "Touchpad"), ("menu", "Menu"), ("home", "Home"), ("siri", "Siri"),
         ("playpause", "Play/Pause"), ("volup", "Vol +"), ("voldown", "Vol −"),
+    ]
+    private let gestureRows: [(String, String)] = [
+        ("swipeleft", "Vuốt trái"), ("swiperight", "Vuốt phải"), ("swipeup", "Vuốt lên"),
+        ("swipedown", "Vuốt xuống"), ("twofingertap", "Chạm 2 ngón"),
     ]
     private let presets: [(String, String)] = [
         ("media:playpause", "Phát / Dừng"), ("media:next", "Bài kế tiếp"), ("media:previous", "Bài trước"),
@@ -457,7 +708,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     ]
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 640),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         super.init()
         window.title = "SiriRemoteMac – Cài đặt nút"
@@ -475,15 +726,32 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let top = NSStackView(views: [profileLabel, profilePopup, addButton, removeButton])
         top.orientation = .horizontal; top.spacing = 10
 
-        gridHost.orientation = .vertical; gridHost.alignment = .leading; gridHost.spacing = 14
+        for h in [gridHost, touchHost] { h.orientation = .vertical; h.alignment = .leading; h.spacing = 14 }
+        let tabs = NSTabView()
+        for (title, host) in [("Nút bấm", gridHost), ("Cảm ứng", touchHost)] {
+            let item = NSTabViewItem(identifier: title)
+            item.label = title
+            let v = NSView()
+            host.translatesAutoresizingMaskIntoConstraints = false
+            v.addSubview(host)
+            NSLayoutConstraint.activate([
+                host.topAnchor.constraint(equalTo: v.topAnchor, constant: 14),
+                host.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 14),
+            ])
+            item.view = v
+            tabs.addTabViewItem(item)
+        }
+        tabs.translatesAutoresizingMaskIntoConstraints = false
+        tabs.widthAnchor.constraint(equalToConstant: 600).isActive = true
+        tabs.heightAnchor.constraint(equalToConstant: 470).isActive = true
 
         let footer = NSTextField(wrappingLabelWithString:
-            "Thay đổi được lưu tự động vào ~/.siriremote.json. Mỗi app có thể ghi đè cấu hình mặc định; nút nào để “Giống mặc định” sẽ dùng cấu hình chung. Cấu hình áp dụng theo app đang ở trên cùng.")
+            "Thay đổi được lưu tự động vào ~/.siriremote.json. Mỗi app có thể ghi đè cấu hình mặc định; nút nào để “Giống mặc định” sẽ dùng cấu hình chung. Cấu hình áp dụng theo app đang ở trên cùng. Cảm ứng cần quyền Accessibility.")
         footer.textColor = .secondaryLabelColor
         footer.font = .systemFont(ofSize: 11)
         footer.preferredMaxLayoutWidth = 600
 
-        let root = NSStackView(views: [top, gridHost, footer])
+        let root = NSStackView(views: [top, tabs, footer])
         root.orientation = .vertical; root.alignment = .leading; root.spacing = 18
         root.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(root)
@@ -538,7 +806,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func rebuildGrid() {
-        for v in gridHost.arrangedSubviews { gridHost.removeArrangedSubview(v); v.removeFromSuperview() }
+        for h in [gridHost, touchHost] {
+            for v in h.arrangedSubviews { h.removeArrangedSubview(v); v.removeFromSuperview() }
+        }
 
         func header(_ t: String) -> NSTextField {
             let f = NSTextField(labelWithString: t); f.font = .boldSystemFont(ofSize: 12); return f
@@ -568,6 +838,71 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             t.orientation = .horizontal; t.spacing = 6
             gridHost.addArrangedSubview(t)
         }
+        buildTouchTab(header)
+    }
+
+    private func buildTouchTab(_ header: (String) -> NSTextField) {
+        if current == nil {
+            let modes: [(String, String)] = [("cursor", "Con trỏ + cuộn 2 ngón"), ("swipe", "Chỉ vuốt / chạm"), ("off", "Tắt cảm ứng")]
+            let mode = NSPopUpButton(frame: .zero, pullsDown: false)
+            for (id, title) in modes {
+                let mi = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                mi.representedObject = id
+                mode.menu?.addItem(mi)
+            }
+            let curMode = cfg.global["touchmode"] ?? "cursor"
+            if let i = mode.itemArray.firstIndex(where: { ($0.representedObject as? String) == curMode }) { mode.selectItem(at: i) }
+            mode.target = self; mode.action = #selector(touchModeChanged(_:))
+
+            func check(_ id: String, _ title: String, _ def: String) -> NSButton {
+                let b = NSButton(checkboxWithTitle: title, target: self, action: #selector(checkChanged(_:)))
+                b.identifier = NSUserInterfaceItemIdentifier(id)
+                b.state = (cfg.global[id] ?? def) == "1" ? .on : .off
+                return b
+            }
+            func slider(_ id: String, _ lo: Double, _ hi: Double, _ def: Double) -> NSSlider {
+                let s = NSSlider(value: Double(cfg.global[id] ?? "") ?? def, minValue: lo, maxValue: hi,
+                                 target: self, action: #selector(sliderChanged(_:)))
+                s.identifier = NSUserInterfaceItemIdentifier(id)
+                s.widthAnchor.constraint(equalToConstant: 220).isActive = true
+                return s
+            }
+            let modeRow = NSStackView(views: [NSTextField(labelWithString: "Chế độ:"), mode])
+            modeRow.orientation = .horizontal; modeRow.spacing = 8
+            let s1 = NSStackView(views: [NSTextField(labelWithString: "Tốc độ con trỏ:"), slider("touchspeed", 0.3, 4, 1.5)])
+            let s2 = NSStackView(views: [NSTextField(labelWithString: "Tốc độ cuộn:"), slider("scrollspeed", 0.2, 3, 1.0)])
+            for r in [s1, s2] { r.orientation = .horizontal; r.spacing = 8 }
+            for v in [modeRow, check("naturalscroll", "Cuộn tự nhiên (đảo chiều)", "1"),
+                      check("tapclick", "Chạm nhẹ để click", "0"), s1, s2] {
+                touchHost.addArrangedSubview(v)
+            }
+        }
+        var rowsViews: [[NSView]] = [[header("Cử chỉ"), header("Hành động"), NSGridCell.emptyContentView, NSGridCell.emptyContentView]]
+        for (name, title) in gestureRows {
+            rowsViews.append([NSTextField(labelWithString: title), makePopup(name),
+                              NSGridCell.emptyContentView, NSGridCell.emptyContentView])
+        }
+        let g = NSGridView(views: rowsViews)
+        g.columnSpacing = 12; g.rowSpacing = 8
+        touchHost.addArrangedSubview(g)
+    }
+
+    @objc private func touchModeChanged(_ sender: NSPopUpButton) {
+        guard let id = sender.selectedItem?.representedObject as? String else { return }
+        cfg.global["touchmode"] = id
+        commit()
+    }
+
+    @objc private func checkChanged(_ sender: NSButton) {
+        guard let id = sender.identifier?.rawValue else { return }
+        cfg.global[id] = sender.state == .on ? "1" : "0"
+        commit(rebuild: false)
+    }
+
+    @objc private func sliderChanged(_ sender: NSSlider) {
+        guard let id = sender.identifier?.rawValue else { return }
+        cfg.global[id] = String(format: "%.2f", sender.doubleValue)
+        commit(rebuild: false)
     }
 
     private func makePopup(_ key: String) -> NSPopUpButton {
@@ -645,10 +980,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         commit()
     }
 
-    private func commit() {
+    private func commit(rebuild: Bool = true) {
         cfg.save()
         controller.reloadMap()
-        rebuildGrid()
+        if rebuild { rebuildGrid() }
     }
 
     @objc private func addApp(_ sender: NSButton) {
@@ -743,6 +1078,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let seizeItem = NSMenuItem()
     private let debugItem = NSMenuItem()
     private let loginItem = NSMenuItem()
+    private let touchItem = NSMenuItem()
 
     private func entry(_ title: String, _ sel: Selector, key: String = "") -> NSMenuItem {
         let m = NSMenuItem(title: title, action: sel, keyEquivalent: key)
@@ -759,11 +1095,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         debugItem.title = "Ghi log nút bấm (dò mã nút)"; debugItem.action = #selector(toggleDebug)
         seizeItem.target = self; debugItem.target = self
         loginItem.title = "Khởi động cùng macOS"; loginItem.action = #selector(toggleLogin); loginItem.target = self
+        touchItem.title = "Bật cảm ứng touchpad"; touchItem.action = #selector(toggleTouch); touchItem.target = self
 
         let menu = NSMenu()
         for m in [statusLine, .separator(),
                   entry("Cài đặt nút…", #selector(openSettings), key: ","), .separator(),
-                  loginItem, seizeItem, debugItem, .separator(),
+                  touchItem, loginItem, seizeItem, debugItem, .separator(),
                   entry("Mở file cấu hình nút", #selector(openConfig)),
                   entry("Nạp lại cấu hình", #selector(reload)),
                   entry("Mở file log", #selector(openLog)), .separator(),
@@ -788,6 +1125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
 
         controller.start()
+        touchEngine.start(force: true)
         refresh()
     }
 
@@ -824,11 +1162,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : controller.isConnected ? "Remote: đã kết nối" : "Remote: chưa thấy (ghép qua Bluetooth)"
         seizeItem.state = controller.seize ? .on : .off
         debugItem.state = debugLog ? .on : .off
+        touchItem.state = touchMode != .off ? .on : .off
         let inApp = Bundle.main.bundlePath.hasSuffix(".app")
         loginItem.isEnabled = inApp      // chỉ bật được khi chạy từ SiriRemoteMac.app
         loginItem.state = (inApp && SMAppService.mainApp.status == .enabled) ? .on : .off
     }
 
+    @objc private func toggleTouch() {
+        var c = ConfigFile.load()
+        c.global["touchmode"] = touchMode == .off ? "cursor" : "off"
+        c.save()
+        controller.reloadMap()
+        refresh()
+    }
     @objc private func toggleSeize() { controller.seize.toggle(); controller.start(); refresh() }
     @objc private func toggleDebug() { debugLog.toggle(); refresh() }
     @objc private func toggleLogin() {

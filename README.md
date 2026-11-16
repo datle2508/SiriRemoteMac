@@ -30,6 +30,18 @@ Tắt Apple TV (hoặc rút nguồn) để remote không tự nối lại với 
 ### Khởi động cùng macOS
 Menu 🎛 → **Khởi động cùng macOS** (chỉ khi chạy từ `.app`).
 
+## Cảm ứng touchpad
+
+App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cách mà HyperVibe, Remote Buddy… dùng). Không cần quyền thêm ngoài Accessibility.
+
+- **Con trỏ + cuộn:** một ngón di chuyển con trỏ, hai ngón cuộn; nhấn touchpad và di chuyển để kéo thả.
+- **Chỉ vuốt / chạm:** không di chuyển con trỏ; vuốt nhanh 4 hướng (`swipeleft`, `swiperight`, `swipeup`, `swipedown`) và chạm 2 ngón (`twofingertap`) chạy hành động bạn gán.
+- Tùy chọn: chạm nhẹ để click, cuộn tự nhiên, tốc độ con trỏ/cuộn. Bật/tắt nhanh ở menu 🎛 → **Bật cảm ứng touchpad**.
+
+Khóa trong `~/.siriremote.json`: `touchmode` (`cursor`/`swipe`/`off`), `touchspeed`, `scrollspeed`, `naturalscroll`, `tapclick`, `touchfamily`. Cử chỉ cũng có thể đặt riêng cho từng app.
+
+Nếu không thấy phản hồi cảm ứng: bật **Ghi log nút bấm**, tắt/bật remote, mở file log và xem các dòng `MT thiết bị #… family=…`. Nếu không có dòng nào ghi `← dùng`, đặt `touchfamily` bằng `family` của remote (mặc định 145). Nếu cuộn bị ngược chiều, bỏ tick *Cuộn tự nhiên*. Đây là API riêng của Apple nên có thể đổi giữa các bản macOS.
+
 ## Cài đặt bằng giao diện
 
 Menu 🎛 → **Cài đặt nút…** (⌘,). Chọn nút, chọn hành động cho *Bấm / Giữ / Nhấn đúp* từ danh sách (hoặc *Mở ứng dụng…*, *Phím tắt…* để tự đặt). Thay đổi được lưu ngay vào `~/.siriremote.json`.
@@ -104,9 +116,9 @@ Cấu hình của bạn được **gộp** lên mặc định; dùng `"none"` đ
 - Không chạy cùng Remote Buddy hoặc SiriMote (tranh quyền với remote).
 
 ## Giới hạn
-- **Vuốt touchpad không dùng được:** khi ghép với macOS, remote chỉ báo "đang chạm" chứ không gửi tọa độ qua HID, và các lệnh ghi để bật cảm ứng đều bị từ chối. Chỉ nhấn/giữ/nhấn đúp touchpad dùng được như một nút bấm.
+- **Tọa độ cảm ứng không có trong báo cáo HID** của remote; app đọc qua `MultitouchSupport` (xem phần *Cảm ứng touchpad*). Phần này chưa được kiểm thử trên mọi đời remote/macOS.
 - **Mic trên remote** không được macOS nhận như thiết bị âm thanh.
-- Chạm nhẹ hai lần (không nhấn) không ghi nhận được.
+- Chạm nhẹ hai lần (không nhấn) chưa được hỗ trợ; dùng nhấn đúp touchpad.
 
 ## Cấu trúc
 ```
