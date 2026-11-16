@@ -40,7 +40,7 @@ App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cá
 
 Khóa trong `~/.siriremote.json`: `touchmode` (`cursor`/`swipe`/`off`), `touchspeed`, `scrollspeed`, `naturalscroll`, `tapclick`, `touchfamily`. Cử chỉ cũng có thể đặt riêng cho từng app.
 
-Nếu không thấy phản hồi cảm ứng: bật **Ghi log nút bấm**, tắt/bật remote, mở file log và xem các dòng `MT thiết bị #… family=…`. Nếu không có dòng nào ghi `← dùng`, đặt `touchfamily` bằng `family` của remote (mặc định 145). Nếu cuộn bị ngược chiều, bỏ tick *Cuộn tự nhiên*. Đây là API riêng của Apple nên có thể đổi giữa các bản macOS.
+Nếu không thấy phản hồi cảm ứng: bật **Ghi log nút bấm**, tắt/bật remote, mở file log và xem các dòng `MT thiết bị #… family=…`. Nếu không có dòng nào ghi `← dùng`, thêm `family` của remote vào `touchfamily` (mặc định `160,145`; 160 là Siri Remote đời 1, 145 là đời 3). Nếu cuộn bị ngược chiều, bỏ tick *Cuộn tự nhiên*. Đây là API riêng của Apple nên có thể đổi giữa các bản macOS.
 
 ## Cài đặt bằng giao diện
 

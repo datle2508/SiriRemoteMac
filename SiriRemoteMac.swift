@@ -121,7 +121,7 @@ let defaultMap: [String: String] = [
     "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
     "naturalscroll": "1",           // 1 = cuộn tự nhiên (đảo chiều), 0 = ngược lại
     "tapclick": "0",                // 1 = chạm nhẹ để click
-    "touchfamily": "145",           // mã họ thiết bị MultitouchSupport của remote (xem log khi bật "Ghi log")
+    "touchfamily": "160,145",       // mã họ thiết bị MultitouchSupport của remote (xem log khi bật "Ghi log")
     "doubletime": "0.3",            // số giây tối đa giữa 2 lần nhấn để tính là nhấn đúp (0.15 – 1.0)
     "holdtime": "0.8",              // số giây giữ nút để tính là "giữ" (0.2 – 3.0)
 ]
@@ -152,7 +152,7 @@ var touchSpeed = 1.5
 var scrollSpeed = 1.0
 var naturalScroll = true
 var tapClick = false
-var touchFamily: Int32 = 145
+var touchFamilies: Set<Int32> = [160, 145]   // 160: Siri Remote đời 1 (đo trên máy thật), 145: đời 3
 var mouseButtonDown = false      // Controller đặt khi nút touchpad đang được nhấn (để kéo thả bằng cảm ứng)
 
 func log(_ s: String) {
@@ -207,7 +207,9 @@ func loadMap() -> [String: Action] {
     if let v = take("SCROLLSPEED"), let d = Double(v) { scrollSpeed = min(max(d, 0.2), 4.0) }
     if let v = take("NATURALSCROLL") { naturalScroll = !(v == "0" || v.lowercased() == "false") }
     if let v = take("TAPCLICK") { tapClick = (v == "1" || v.lowercased() == "true") }
-    if let v = take("TOUCHFAMILY"), let n = Int32(v) { touchFamily = n }
+    if let v = take("TOUCHFAMILY") {   // danh sách cách nhau bằng dấu phẩy; luôn gồm 160 và 145
+        touchFamilies = Set(v.split(whereSeparator: { $0 == "," || $0 == " " }).compactMap { Int32($0) }).union([160, 145])
+    }
     var map: [String: Action] = [:]
     for (k, v) in specs {
         if v.isEmpty || v == "none" { continue }   // "none": tắt hành động mặc định của nút này
@@ -267,7 +269,7 @@ final class TouchEngine {
     private var deviceList: CFArray?
     private var devices: [UnsafeMutableRawPointer] = []
     private var runningMode: TouchMode = .off
-    private var runningFamily: Int32 = -1
+    private var runningFamilies: Set<Int32> = []
 
     // Trạng thái cử chỉ
     private var inSession = false
@@ -284,7 +286,7 @@ final class TouchEngine {
 
     /// force = false: bỏ qua nếu đang chạy đúng cấu hình.
     func start(force: Bool) {
-        if !force && isRunning && runningMode == touchMode && runningFamily == touchFamily { return }
+        if !force && isRunning && runningMode == touchMode && runningFamilies == touchFamilies { return }
         stop()
         guard touchMode != .off else { return }
         if lib == nil { lib = dlopen("/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport", RTLD_NOW) }
@@ -301,15 +303,15 @@ final class TouchEngine {
             let dev = UnsafeMutableRawPointer(mutating: p)
             var f: Int32 = -1
             _ = fam?(dev, &f)
-            if debugLog { log("MT thiết bị #\(i) family=\(f)\(f == touchFamily ? " ← dùng" : "")") }
-            if f == touchFamily { found.append(dev) }
+            if debugLog { log("MT thiết bị #\(i) family=\(f)\(touchFamilies.contains(f) ? " ← dùng" : "")") }
+            if touchFamilies.contains(f) { found.append(dev) }
         }
         let reg = unsafeBitCast(sReg, to: MTFnReg.self)
         let startFn = unsafeBitCast(sStart, to: MTFnStart.self)
         for dev in found { reg(dev, touchCallback); startFn(dev, 0) }
         devices = found
         runningMode = touchMode
-        runningFamily = touchFamily
+        runningFamilies = touchFamilies
         if debugLog { log("Cảm ứng: bắt đầu với \(found.count) thiết bị, chế độ \(touchMode.rawValue)") }
     }
 
