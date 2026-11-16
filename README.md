@@ -42,6 +42,13 @@ Khóa trong `~/.siriremote.json`: `touchmode` (`cursor`/`swipe`/`off`), `touchsp
 
 Nếu không thấy phản hồi cảm ứng: bật **Ghi log nút bấm**, tắt/bật remote, mở file log và xem các dòng `MT thiết bị #… family=…`. Nếu không có dòng nào ghi `← dùng`, thêm `family` của remote vào `touchfamily` (mặc định `160,145`; 160 là Siri Remote đời 1, 145 là đời 3). Nếu cuộn bị ngược chiều, bỏ tick *Cuộn tự nhiên*. Đây là API riêng của Apple nên có thể đổi giữa các bản macOS.
 
+## Dùng với các đời Siri Remote khác
+
+Cài đặt → tab **Remote**:
+- **Đời remote:** để *Tự nhận* (theo product ID: `0x266` = đời 1) hoặc chọn tay. Đời 2/3 hiện thêm các nút click ring (giữa/↑/↓/←/→), Back, TV, Mute, Power ở tab *Nút bấm*. Mã HID các nút này **theo chuẩn Consumer Control, chưa kiểm chứng trên máy thật**.
+- **Học nút mới…:** bấm nút trên remote để app ghi nhận mã và đặt tên; dùng khi nút chưa có hoặc mã mặc định không đúng. Lưu trong khóa `custombuttons` của `~/.siriremote.json`.
+- **Mã cảm ứng (family):** đời 1 = `160`, đời 3 = `145` (luôn thử cả hai). Đời khác: bật *Ghi log nút bấm*, xem dòng `MT thiết bị #… family=…` rồi thêm mã vào đây.
+
 ## Cài đặt bằng giao diện
 
 Menu 🎛 → **Cài đặt nút…** (⌘,). Chọn nút, chọn hành động cho *Bấm / Giữ / Nhấn đúp* từ danh sách (hoặc *Mở ứng dụng…*, *Phím tắt…* để tự đặt). Thay đổi được lưu ngay vào `~/.siriremote.json`.

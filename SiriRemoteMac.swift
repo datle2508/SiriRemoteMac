@@ -101,10 +101,30 @@ enum Action {
 // MARK: - Cấu hình
 
 /// Tên nút dùng trong file cấu hình → mã HID. Vẫn có thể dùng mã "PP:UUUU" trực tiếp.
-let buttonNames: [String: String] = [
+let builtinButtonNames: [String: String] = [
     "menu": "01:0086", "home": "0C:0060", "siri": "0C:0004", "touchpad": "0C:0080",
     "playpause": "0C:00CD", "volup": "0C:00E9", "voldown": "0C:00EA",
+    // Remote đời 2/3: mã theo chuẩn HID Consumer Control (chưa kiểm chứng trên máy thật;
+    // nếu sai, dùng "Học nút mới…" trong cài đặt để tự ghi nhận mã đúng).
+    "up": "0C:0042", "down": "0C:0043", "left": "0C:0044", "right": "0C:0045", "select": "0C:0041",
+    "back": "0C:0224", "tv": "0C:0223", "mute": "0C:00E2", "power": "0C:0030",
 ]
+/// Gồm nút có sẵn + nút tự học (khóa "custombuttons" trong file cấu hình).
+var buttonNames = builtinButtonNames
+var customButtons: [String: String] = [:]
+var detectedProductID: Int = 0          // product ID của remote đang kết nối (0x266 = đời 1)
+
+func registerCustomButtons(_ raw: [String: Any]) {
+    customButtons = [:]
+    buttonNames = builtinButtonNames
+    for (k, v) in raw {
+        let name = k.lowercased().trimmingCharacters(in: .whitespaces)
+        let code = "\(v)".uppercased().trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, code.contains(":") else { continue }
+        customButtons[name] = code
+        buttonNames[name] = code
+    }
+}
 
 /// Thêm "+hold" sau tên nút (ví dụ "home+hold") cho hành động khi giữ nút.
 let defaultMap: [String: String] = [
@@ -116,6 +136,7 @@ let defaultMap: [String: String] = [
     "playpause": "media:playpause",
     "volup": "media:volumeup",
     "voldown": "media:volumedown",
+    "remotemodel": "auto",          // auto | gen1 | gen23: quyết định các nút hiển thị trong cài đặt
     "touchmode": "cursor",          // cảm ứng: cursor (con trỏ + cuộn + vuốt), swipe (chỉ vuốt/chạm), off
     "touchspeed": "1.5",            // tốc độ con trỏ (0.3 – 5)
     "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
@@ -138,7 +159,7 @@ func normalizeKey(_ raw: String) -> String {
 }
 
 /// Các nút hệ thống tự xử lý khi KHÔNG chiếm quyền remote (tránh chạy trùng).
-let systemHandledKeys: Set<String> = ["0C:00CD", "0C:00E9", "0C:00EA"]
+let systemHandledKeys: Set<String> = ["0C:00CD", "0C:00E9", "0C:00EA", "0C:00E2"]
 
 let configPath = NSHomeDirectory() + "/.siriremote.json"
 let logPath = NSHomeDirectory() + "/Library/Logs/SiriRemoteMac.log"
@@ -170,16 +191,23 @@ var appDisabled: [String: Set<String>] = [:]     // nút bị tắt ("none") ri�
 
 func loadMap() -> [String: Action] {
     appOverrides = [:]; appDisabled = [:]
+    if let data = FileManager.default.contents(atPath: configPath),
+       let user = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        registerCustomButtons((user["custombuttons"] as? [String: Any]) ?? [:])
+    } else {
+        registerCustomButtons([:])
+    }
     var specs: [String: String] = [:]
     for (k, v) in defaultMap { specs[normalizeKey(k)] = v }
     if let data = FileManager.default.contents(atPath: configPath) {
         if let user = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             for (k, v) in user {
+                if k == "custombuttons" { continue }
                 if k == "apps" {
                     for (bid, d) in (v as? [String: Any]) ?? [:] {
                         for (kk, vv) in (d as? [String: Any]) ?? [:] {
                             let key = normalizeKey(kk), spec = "\(vv)"
-                            if ["HOLDTIME", "DOUBLETIME", "TOUCHMODE", "TOUCHSPEED", "SCROLLSPEED", "NATURALSCROLL", "TAPCLICK", "TOUCHFAMILY"].contains(key) { continue }
+                            if ["HOLDTIME", "DOUBLETIME", "REMOTEMODEL", "TOUCHMODE", "TOUCHSPEED", "SCROLLSPEED", "NATURALSCROLL", "TAPCLICK", "TOUCHFAMILY"].contains(key) { continue }
                             if spec.isEmpty || spec == "none" { appDisabled[bid, default: []].insert(key); continue }
                             if let a = Action.parse(spec) { appOverrides[bid, default: [:]][key] = a }
                             else { log("Hành động không hợp lệ trong \(bid): \(kk) → \(spec)") }
@@ -202,6 +230,7 @@ func loadMap() -> [String: Action] {
         if let t = Double(h) { holdDelaySeconds = min(max(t, 0.2), 3.0) } else { log("holdtime không hợp lệ: \(h)") }
     }
     func take(_ k: String) -> String? { specs.removeValue(forKey: k) }
+    _ = take("REMOTEMODEL")
     if let v = take("TOUCHMODE") { touchMode = TouchMode(rawValue: v.lowercased()) ?? .cursor }
     if let v = take("TOUCHSPEED"), let d = Double(v) { touchSpeed = min(max(d, 0.3), 5.0) }
     if let v = take("SCROLLSPEED"), let d = Double(v) { scrollSpeed = min(max(d, 0.2), 4.0) }
@@ -447,6 +476,8 @@ final class Controller {
     var seize = false           // bật nếu muốn gán lại Play/Pause, Vol (tránh macOS xử lý trùng)
 
     var isConnected: Bool { !remotes.isEmpty }
+    /// Khi khác nil: nút remote kế tiếp được bấm sẽ được gửi vào đây (không chạy hành động) để "học" mã nút.
+    var learnHandler: ((String) -> Void)?
 
     func start() {
         stop()
@@ -499,6 +530,8 @@ final class Controller {
         guard name.lowercased().contains("remote") else { return }
         let r = IOHIDDeviceOpen(d, IOOptionBits(seize ? kIOHIDOptionsTypeSeizeDevice : kIOHIDOptionsTypeNone))
         guard r == kIOReturnSuccess else { log("Không mở được remote (\(r))"); return }
+        detectedProductID = (IOHIDDeviceGetProperty(d, kIOHIDProductIDKey as CFString) as? Int) ?? 0
+        if debugLog { log("REMOTE \(name) productID=0x\(String(detectedProductID, radix: 16))") }
         IOHIDDeviceRegisterInputValueCallback(d, onValue, nil)
         IOHIDDeviceScheduleWithRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         remotes.append(d)
@@ -523,6 +556,10 @@ final class Controller {
         let el = IOHIDValueGetElement(value)
         let key = String(format: "%02X:%04X", IOHIDElementGetUsagePage(el), IOHIDElementGetUsage(el))
         let down = IOHIDValueGetIntegerValue(value) != 0
+        if let h = learnHandler {
+            if down { learnHandler = nil; DispatchQueue.main.async { h(key) } }
+            return
+        }
         if debugLog { log("BUTTON \(key) (\(buttonNames.first { $0.value == key }?.key ?? "?")) \(down ? "down" : "up")") }
         let tap = action(for: key)
         let hold = action(for: key + "+HOLD")
@@ -649,14 +686,19 @@ func canonicalKey(_ raw: String) -> String {
 struct ConfigFile {
     var global: [String: String] = [:]
     var apps: [String: [String: String]] = [:]
+    var custom: [String: String] = [:]
 
     static func load() -> ConfigFile {
         var c = ConfigFile()
+        let fileData = FileManager.default.contents(atPath: configPath)
+        let parsed = fileData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        registerCustomButtons((parsed?["custombuttons"] as? [String: Any]) ?? [:])
         for (k, v) in defaultMap { c.global[canonicalKey(k)] = v }
-        if let data = FileManager.default.contents(atPath: configPath),
-           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        if let obj = parsed {
             for (k, v) in obj {
-                if k == "apps" {
+                if k == "custombuttons" {
+                    for (n, code) in (v as? [String: Any]) ?? [:] { c.custom[n.lowercased()] = "\(code)".uppercased() }
+                } else if k == "apps" {
                     for (bid, d) in (v as? [String: Any]) ?? [:] {
                         var m: [String: String] = [:]
                         for (kk, vv) in (d as? [String: Any]) ?? [:] { m[canonicalKey(kk)] = "\(vv)" }
@@ -673,6 +715,7 @@ struct ConfigFile {
     func save() {
         var dict: [String: Any] = global
         if !apps.isEmpty { dict["apps"] = apps }
+        if !custom.isEmpty { dict["custombuttons"] = custom }
         guard let d = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) else { return }
         try? d.write(to: URL(fileURLWithPath: configPath), options: .atomic)
     }
@@ -690,10 +733,30 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let touchHost = NSStackView()      // tab "Cảm ứng"
     private var centered = false
 
-    private let rows: [(String, String)] = [
+    private let baseRows: [(String, String)] = [
         ("touchpad", "Touchpad"), ("menu", "Menu"), ("home", "Home"), ("siri", "Siri"),
         ("playpause", "Play/Pause"), ("volup", "Vol +"), ("voldown", "Vol −"),
     ]
+    private let gen23Rows: [(String, String)] = [
+        ("select", "Click ring: giữa"), ("up", "Click ring ↑"), ("down", "Click ring ↓"),
+        ("left", "Click ring ←"), ("right", "Click ring →"), ("back", "Back"), ("tv", "TV"),
+        ("mute", "Mute"), ("power", "Power"),
+    ]
+    private let remoteHost = NSStackView()      // tab "Remote"
+
+    /// "gen1" hoặc "gen23": theo lựa chọn trong tab Remote, hoặc tự nhận từ product ID khi để "auto".
+    private var effectiveModel: String {
+        let m = cfg.global["remotemodel"] ?? "auto"
+        if m != "auto" { return m }
+        return detectedProductID == 0 || detectedProductID == 0x266 ? "gen1" : "gen23"
+    }
+
+    private var rows: [(String, String)] {
+        var r = baseRows
+        if effectiveModel == "gen23" { r += gen23Rows }
+        for name in cfg.custom.keys.sorted() where !r.contains(where: { $0.0 == name }) { r.append((name, "Nút “\(name)”")) }
+        return r
+    }
     private let gestureRows: [(String, String)] = [
         ("swipeleft", "Vuốt trái"), ("swiperight", "Vuốt phải"), ("swipeup", "Vuốt lên"),
         ("swipedown", "Vuốt xuống"), ("twofingertap", "Chạm 2 ngón"),
@@ -728,19 +791,32 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let top = NSStackView(views: [profileLabel, profilePopup, addButton, removeButton])
         top.orientation = .horizontal; top.spacing = 10
 
-        for h in [gridHost, touchHost] { h.orientation = .vertical; h.alignment = .leading; h.spacing = 14 }
+        for h in [gridHost, touchHost, remoteHost] { h.orientation = .vertical; h.alignment = .leading; h.spacing = 14 }
         let tabs = NSTabView()
-        for (title, host) in [("Nút bấm", gridHost), ("Cảm ứng", touchHost)] {
+        for (title, host, scrolls) in [("Nút bấm", gridHost, true), ("Cảm ứng", touchHost, false), ("Remote", remoteHost, false)] {
             let item = NSTabViewItem(identifier: title)
             item.label = title
-            let v = NSView()
             host.translatesAutoresizingMaskIntoConstraints = false
-            v.addSubview(host)
-            NSLayoutConstraint.activate([
-                host.topAnchor.constraint(equalTo: v.topAnchor, constant: 14),
-                host.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 14),
-            ])
-            item.view = v
+            if scrolls {
+                let sv = NSScrollView()
+                sv.hasVerticalScroller = true
+                sv.drawsBackground = false
+                sv.documentView = host
+                let clip = sv.contentView
+                NSLayoutConstraint.activate([
+                    host.topAnchor.constraint(equalTo: clip.topAnchor, constant: 14),
+                    host.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: 14),
+                ])
+                item.view = sv
+            } else {
+                let v = NSView()
+                v.addSubview(host)
+                NSLayoutConstraint.activate([
+                    host.topAnchor.constraint(equalTo: v.topAnchor, constant: 14),
+                    host.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 14),
+                ])
+                item.view = v
+            }
             tabs.addTabViewItem(item)
         }
         tabs.translatesAutoresizingMaskIntoConstraints = false
@@ -808,7 +884,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func rebuildGrid() {
-        for h in [gridHost, touchHost] {
+        for h in [gridHost, touchHost, remoteHost] {
             for v in h.arrangedSubviews { h.removeArrangedSubview(v); v.removeFromSuperview() }
         }
 
@@ -841,6 +917,122 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             gridHost.addArrangedSubview(t)
         }
         buildTouchTab(header)
+        buildRemoteTab()
+    }
+
+    private func buildRemoteTab() {
+        guard current == nil else {
+            let l = NSTextField(wrappingLabelWithString: "Cài đặt remote áp dụng chung cho mọi app. Chọn “Mặc định (mọi app)” ở ô Áp dụng cho để chỉnh.")
+            l.preferredMaxLayoutWidth = 560
+            remoteHost.addArrangedSubview(l)
+            return
+        }
+        // Đời remote
+        let models: [(String, String)] = [("auto", "Tự nhận (khuyên dùng)"), ("gen1", "Đời 1 (A1513 / A1844)"), ("gen23", "Đời 2 / 3 (A2540 / A2854, USB-C)")]
+        let pop = NSPopUpButton(frame: .zero, pullsDown: false)
+        for (id, title) in models {
+            let mi = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            mi.representedObject = id
+            pop.menu?.addItem(mi)
+        }
+        let cur = cfg.global["remotemodel"] ?? "auto"
+        if let i = pop.itemArray.firstIndex(where: { ($0.representedObject as? String) == cur }) { pop.selectItem(at: i) }
+        pop.target = self; pop.action = #selector(modelChanged(_:))
+        let detected = detectedProductID == 0 ? "chưa thấy remote" : "product ID 0x" + String(detectedProductID, radix: 16)
+        let modelRow = NSStackView(views: [NSTextField(labelWithString: "Đời remote:"), pop,
+                                           NSTextField(labelWithString: "(đang nhận: \(detected))")])
+        modelRow.orientation = .horizontal; modelRow.spacing = 8
+        remoteHost.addArrangedSubview(modelRow)
+
+        // Mã họ cảm ứng
+        let fam = NSTextField(string: cfg.global["touchfamily"] ?? "160,145")
+        fam.identifier = NSUserInterfaceItemIdentifier("touchfamily")
+        fam.target = self; fam.action = #selector(familyChanged(_:))
+        (fam.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true
+        fam.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        let famRow = NSStackView(views: [NSTextField(labelWithString: "Mã cảm ứng (family):"), fam])
+        famRow.orientation = .horizontal; famRow.spacing = 8
+        remoteHost.addArrangedSubview(famRow)
+        let famNote = NSTextField(wrappingLabelWithString: "Đời 1 = 160, đời 3 = 145 (luôn được thử). Với đời khác, bật “Ghi log nút bấm”, nối lại remote, mở log và thêm mã `family` của remote vào đây, cách nhau bằng dấu phẩy.")
+        famNote.textColor = .secondaryLabelColor; famNote.font = .systemFont(ofSize: 11); famNote.preferredMaxLayoutWidth = 560
+        remoteHost.addArrangedSubview(famNote)
+
+        // Nút tự học
+        let learn = NSButton(title: "Học nút mới…", target: self, action: #selector(learnButton))
+        remoteHost.addArrangedSubview(learn)
+        let learnNote = NSTextField(wrappingLabelWithString: "Dùng khi một nút (ví dụ nút trên remote đời khác) chưa có trong danh sách: bấm “Học nút mới…”, bấm nút đó trên remote rồi đặt tên. Nút sẽ xuất hiện ở tab Nút bấm.")
+        learnNote.textColor = .secondaryLabelColor; learnNote.font = .systemFont(ofSize: 11); learnNote.preferredMaxLayoutWidth = 560
+        remoteHost.addArrangedSubview(learnNote)
+
+        for name in cfg.custom.keys.sorted() {
+            let del = NSButton(title: "Xóa", target: self, action: #selector(removeCustom(_:)))
+            del.identifier = NSUserInterfaceItemIdentifier(name)
+            let row = NSStackView(views: [NSTextField(labelWithString: "\(name)  →  \(cfg.custom[name] ?? "")"), del])
+            row.orientation = .horizontal; row.spacing = 10
+            remoteHost.addArrangedSubview(row)
+        }
+    }
+
+    @objc private func modelChanged(_ sender: NSPopUpButton) {
+        guard let id = sender.selectedItem?.representedObject as? String else { return }
+        cfg.global["remotemodel"] = id
+        commit()
+    }
+
+    @objc private func familyChanged(_ sender: NSTextField) {
+        cfg.global["touchfamily"] = sender.stringValue
+        commit(rebuild: false)
+    }
+
+    @objc private func learnButton() {
+        let a = NSAlert()
+        a.messageText = "Bấm một nút trên remote…"
+        a.informativeText = "Nút đầu tiên bạn bấm sẽ được ghi nhận (không chạy hành động)."
+        a.addButton(withTitle: "Hủy")
+        controller.learnHandler = { [weak self] key in
+            guard let self = self else { return }
+            self.window.endSheet(a.window)
+            self.finishLearn(key)
+        }
+        a.beginSheetModal(for: window) { _ in controller.learnHandler = nil }
+    }
+
+    private func finishLearn(_ key: String) {
+        if let existing = buttonNames.first(where: { $0.value == key })?.key {
+            let e = NSAlert()
+            e.messageText = "Nút này đã có tên: \(existing)"
+            e.informativeText = "Mã nút: \(key)"
+            e.runModal()
+            return
+        }
+        let a = NSAlert()
+        a.messageText = "Đặt tên cho nút (mã \(key))"
+        a.informativeText = "Chữ thường, không dấu, không khoảng trắng. Ví dụ: ring_up"
+        let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        a.accessoryView = f
+        a.addButton(withTitle: "Lưu"); a.addButton(withTitle: "Hủy")
+        a.window.initialFirstResponder = f
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+        let name = f.stringValue.lowercased().trimmingCharacters(in: .whitespaces)
+        let ok = !name.isEmpty && !name.contains(where: { " +:".contains($0) }) && buttonNames[name] == nil
+        guard ok else {
+            let e = NSAlert()
+            e.messageText = "Tên không hợp lệ hoặc đã tồn tại: \(name)"
+            e.runModal()
+            return
+        }
+        cfg.custom[name] = key
+        commit()
+    }
+
+    @objc private func removeCustom(_ sender: NSButton) {
+        guard let name = sender.identifier?.rawValue else { return }
+        cfg.custom[name] = nil
+        for k in [name, name + "+hold", name + "+double"] {
+            cfg.global[k] = nil
+            for bid in cfg.apps.keys { cfg.apps[bid]?[k] = nil }
+        }
+        commit()
     }
 
     private func buildTouchTab(_ header: (String) -> NSTextField) {
