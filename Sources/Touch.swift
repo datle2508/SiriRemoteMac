@@ -31,9 +31,7 @@ func navSwipe(back: Bool) {
     }
     // Quãng vuốt đủ dài (hơn chiều rộng màn hình) để vượt ngưỡng xác nhận của trình duyệt
     let total = max(CGDisplayBounds(CGMainDisplayID()).width * 1.15, 1400)
-    let frames = 26
-    let weights = (1...frames).map { 1.0 - Double($0) / Double(frames + 1) * 0.8 }     // nhanh rồi chậm dần
-    let sum = weights.reduce(0, +)
+    let duration = 0.45
 
     func post(_ delta: Int32, _ phase: Int64) {
         guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
@@ -42,14 +40,34 @@ func navSwipe(back: Bool) {
         if let f = CGEventField(rawValue: 99) { e.setIntegerValueField(f, value: phase) }   // scrollPhase
         e.post(tap: .cghidEventTap)
     }
-    var i = 0
-    Timer.scheduledTimer(withTimeInterval: 0.011, repeats: true) { t in
-        i += 1
-        let delta = Int32((dir * total * weights[i - 1] / sum).rounded())
-        post(delta, i == 1 ? 1 : 2)                       // sự kiện đầu mang luôn quãng vuốt đầu tiên
-        if i >= frames { t.invalidate(); post(0, 4) }     // nhấc tay
+
+    // Dựa theo thời gian thực (không theo số nhịp) để chuyển động mượt dù nhịp timer lệch; ~125 sự kiện/giây
+    navTimer?.cancel()
+    let start = ProcessInfo.processInfo.systemUptime
+    var sent: Int32 = 0
+    var started = false
+    let timer = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive))
+    timer.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .microseconds(500))
+    timer.setEventHandler {
+        let t = min((ProcessInfo.processInfo.systemUptime - start) / duration, 1.0)
+        let eased = 0.5 - 0.5 * cos(Double.pi * t)                 // tăng tốc rồi giảm tốc như ngón tay thật
+        let target = Int32((dir * total * eased).rounded())
+        let delta = target - sent
+        if delta != 0 {
+            post(delta, started ? 2 : 1)                           // sự kiện đầu mang luôn quãng vuốt đầu tiên
+            started = true
+            sent = target
+        }
+        if t >= 1.0 {
+            if started { post(0, 4) }                              // nhấc tay
+            timer.cancel()
+        }
     }
+    navTimer = timer
+    timer.resume()
 }
+
+private var navTimer: DispatchSourceTimer?
 
 /// Đổi qua lại giữa chế độ con trỏ và chế độ vuốt/chạm; lưu vào file cấu hình.
 func toggleTouchMode() {
