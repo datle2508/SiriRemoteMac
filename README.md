@@ -102,6 +102,8 @@ File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** 
 | `app:Tên App` | Mở ứng dụng |
 | `click` | Click chuột trái (không kết hợp với `+hold`/`+double`) |
 | `sleep`, `displaysleep` | Cho Mac ngủ / tắt màn hình |
+| `smartzoom` | Zoom thông minh (như chạm đúp hai ngón trên Magic Trackpad); gán cho cử chỉ `twofingerdoubletap` |
+| `zoomin`, `zoomout`, `zoomreset` | ⌘+, ⌘−, ⌘0 |
 | `mission` | Mission Control |
 | `expose` | Exposé – cửa sổ của app đang dùng (phím ⌃↓; cần bật trong Cài đặt hệ thống → Bàn phím → Phím tắt → Mission Control) |
 | `screensaver` | Bật màn hình chờ |

@@ -336,11 +336,32 @@ final class TouchEngine {
                 if touchMode == .cursor { lastTapEnd = ts }
             }
         } else if fingers == 2, dur < 0.25, travel < 0.06 {
-            fire("TWOFINGERTAP")
+            twoFingerTap(at: ts)
         }
     }
 
     // MARK: Hành động
+
+    /// Chạm 2 ngón: nếu có gán "chạm đúp 2 ngón" thì chờ 0,3 s xem có lần chạm thứ hai không (đúp → zoom thông minh…);
+    /// không có lần hai thì chạy hành động chạm đơn như bình thường.
+    private var pendingTwoTap: DispatchWorkItem?
+    private var lastTwoTap = -10.0
+
+    private func twoFingerTap(at ts: Double) {
+        guard controller.action(for: "TWOFINGERDOUBLETAP") != nil else { fire("TWOFINGERTAP"); return }
+        if let p = pendingTwoTap, ts - lastTwoTap < 0.4 {
+            p.cancel(); pendingTwoTap = nil
+            fire("TWOFINGERDOUBLETAP")
+            return
+        }
+        lastTwoTap = ts
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingTwoTap = nil
+            self?.fire("TWOFINGERTAP")
+        }
+        pendingTwoTap = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
 
     private func fire(_ key: String) {
         guard let a = controller.action(for: key) else { return }

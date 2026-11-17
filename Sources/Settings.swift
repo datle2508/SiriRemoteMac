@@ -20,7 +20,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     ]
     private static let gestureRows: [(String, String)] = [
         ("swipeleft", T("Vuốt trái")), ("swiperight", T("Vuốt phải")), ("swipeup", T("Vuốt lên")),
-        ("swipedown", T("Vuốt xuống")), ("twofingertap", T("Chạm 2 ngón")),
+        ("swipedown", T("Vuốt xuống")), ("twofingertap", T("Chạm 2 ngón")), ("twofingerdoubletap", T("Chạm đúp 2 ngón")),
     ]
     private static let actionGroups: [(String, [(String, String)])] = [
         ("Media", [("media:playpause", T("Phát / Dừng")), ("media:next", T("Bài kế tiếp")), ("media:previous", T("Bài trước")),
@@ -32,6 +32,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
                   ("nav:back", T("Back (thử nghiệm: hiệu ứng vuốt)")), ("nav:forward", T("Forward (thử nghiệm: hiệu ứng vuốt)"))]),
         (T("Chuột"), [("click", T("Click chuột")), ("rightclick", T("Click phải")), ("scroll:up", T("Cuộn lên")), ("scroll:down", T("Cuộn xuống"))]),
+        (T("Zoom"), [("smartzoom", T("Zoom thông minh (như Magic Trackpad)")), ("zoomin", T("Phóng to (⌘+)")),
+                      ("zoomout", T("Thu nhỏ (⌘−)")), ("zoomreset", T("Kích thước thật (⌘0)"))]),
         (T("Hệ thống"), [("mission", "Mission Control"), ("expose", T("Exposé (cửa sổ của app)")), ("screensaver", T("Màn hình chờ")),
                       ("showdesktop", T("Hiện màn hình nền")), ("lockscreen", T("Khóa màn hình")), ("sleep", T("Cho Mac ngủ")), ("displaysleep", T("Tắt màn hình")),
                       ("toggletouch", T("Đổi chế độ cảm ứng (con trỏ ↔ vuốt)"))]),
@@ -55,7 +57,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         "select": "circle.circle", "up": "arrow.up.circle", "down": "arrow.down.circle", "left": "arrow.left.circle",
         "right": "arrow.right.circle", "back": "chevron.backward", "tv": "tv", "mute": "speaker.slash.fill", "power": "power",
         "swipeleft": "arrow.left", "swiperight": "arrow.right", "swipeup": "arrow.up", "swipedown": "arrow.down",
-        "twofingertap": "hand.tap",
+        "twofingertap": "hand.tap", "twofingerdoubletap": "hand.tap.fill",
+        "smartzoom": "plus.magnifyingglass", "zoomin": "plus.magnifyingglass", "zoomout": "minus.magnifyingglass", "zoomreset": "1.magnifyingglass",
     ]
     private static let allPresets: [(String, String)] = SettingsWindow.actionGroups.flatMap { $0.1 }
 
@@ -69,7 +72,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                          "home": "key:f", "menu": "key:escape"]),
         (T("Lướt TikTok"), ["touchpad": "key:space", "swipeup": "key:down", "swipedown": "key:up",
                          "home": "key:m", "menu": "key:escape"]),
-        (T("Duyệt web"), ["menu": "key:cmd+[", "home": "key:cmd+]", "swipeup": "scroll:down", "swipedown": "scroll:up"]),
+        (T("Duyệt web"), ["menu": "key:cmd+[", "home": "key:cmd+]", "swipeup": "scroll:down", "swipedown": "scroll:up",
+                      "twofingerdoubletap": "smartzoom"]),
         (T("Thuyết trình"), ["touchpad": "key:right", "menu": "key:left", "home": "key:escape",
                           "swipeleft": "key:right", "swiperight": "key:left"]),
     ]

@@ -14,6 +14,7 @@ enum Action {
     case command(String, [String])
     case nav(Bool)                  // true = Back, false = Forward (hiệu ứng vuốt như Magic Trackpad)
     case rightClick                 // click chuột phải
+    case smartZoom                  // zoom thông minh như chạm đúp hai ngón trên Magic Trackpad
     case dock(String)               // thông báo gửi cho Dock (Mission Control, Exposé, Show Desktop)
     case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
 
@@ -43,6 +44,10 @@ enum Action {
         if spec == "displaysleep" { return .command("/usr/bin/pmset", ["displaysleepnow"]) }
         if spec == "mission" { return .dock("com.apple.expose.awake") }
         if spec == "expose" { return .dock("com.apple.expose.front.awake") }   // Exposé: cửa sổ của app
+        if spec == "smartzoom" { return .smartZoom }
+        if spec == "zoomin" { return .key(24, .maskCommand) }      // ⌘=
+        if spec == "zoomout" { return .key(27, .maskCommand) }     // ⌘-
+        if spec == "zoomreset" { return .key(29, .maskCommand) }   // ⌘0
         if spec == "showdesktop" { return .dock("com.apple.showdesktop.awake") }
         if spec == "screensaver" { return .command("/usr/bin/open", ["-a", "ScreenSaverEngine"]) }
         if spec == "lockscreen" { return .key(12, [.maskControl, .maskCommand]) }   // ⌃⌘Q
@@ -97,6 +102,8 @@ enum Action {
             let pos = CGEvent(source: nil)?.location ?? .zero
             postMouse(.rightMouseDown, at: pos, button: .right)
             postMouse(.rightMouseUp, at: pos, button: .right)
+        case .smartZoom:
+            postSmartMagnify()
         case .dock(let name):
             if !sendDockNotification(name) {            // dự phòng: phím tắt mặc định của macOS
                 switch name {
@@ -160,4 +167,15 @@ func sendDockNotification(_ name: String) -> Bool {
     guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CoreDockSendNotification") else { return false }   // RTLD_DEFAULT
     unsafeBitCast(sym, to: Fn.self)(name as CFString, 0)
     return true
+}
+
+/// Gửi sự kiện "smart magnify" (NSEventTypeSmartMagnify = 32) tới cửa sổ dưới con trỏ, như chạm đúp hai ngón trên trackpad.
+/// Safari, Preview, Chrome… phản hồi bằng cách phóng to/thu nhỏ vào vùng nội dung quanh con trỏ.
+func postSmartMagnify() {
+    guard let type = CGEventType(rawValue: 32), let e = CGEvent(source: nil) else { return }
+    let pos = e.location
+    e.type = type
+    e.location = pos
+    e.flags = []
+    e.post(tap: .cghidEventTap)
 }
