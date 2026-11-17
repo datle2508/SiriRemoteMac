@@ -41,7 +41,7 @@
       <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#000" flood-opacity="0.7"/>
     </filter>
     <clipPath id="tile"><rect x="64" y="64" width="896" height="896" rx="200"/></clipPath>
-    <clipPath id="body"><rect x="332" y="148" width="360" height="728" rx="84"/></clipPath>
+    <clipPath id="body"><rect x="364" y="250" width="296" height="664" rx="64"/></clipPath>
   </defs>
 
   <!-- nền đen -->
@@ -52,39 +52,40 @@
   </g>
   <rect x="66" y="66" width="892" height="892" rx="198" fill="none" stroke="url(#rim)" stroke-width="4" opacity="0.7"/>
 
-  <!-- thân remote bằng kính -->
-  <g filter="url(#shadow)">
-    <rect x="332" y="148" width="360" height="728" rx="84" fill="#0b0c0e"/>
+  <g transform="translate(0 -72)">
+    <!-- thân remote bằng kính -->
+    <g filter="url(#shadow)">
+      <rect x="364" y="250" width="296" height="664" rx="64" fill="#0b0c0e"/>
+    </g>
+    <rect x="364" y="250" width="296" height="664" rx="64" fill="url(#glass)"/>
+    <g clip-path="url(#body)">
+      <ellipse cx="512" cy="230" rx="260" ry="150" fill="url(#spec)" opacity="0.45"/>
+      <!-- touchpad phẳng, tràn ngang và sát mép trên -->
+      <rect x="364" y="250" width="296" height="324" fill="url(#pad)"/>
+      <rect x="364" y="573" width="296" height="2" fill="#ffffff" fill-opacity="0.25"/>
+    </g>
+    <rect x="366" y="252" width="292" height="660" rx="62" fill="none" stroke="url(#rim)" stroke-width="4"/>
+
+    <!-- nút -->
+    <circle cx="452" cy="628" r="38" fill="url(#btn)"/>
+    <circle cx="572" cy="628" r="38" fill="url(#btn)"/>
+    <circle cx="452" cy="738" r="38" fill="url(#btn)"/>
+    <circle cx="452" cy="848" r="38" fill="url(#btn)"/>
+    <rect x="534" y="700" width="76" height="186" rx="38" fill="url(#btn)"/>
+
+    <g fill="#0b0c0e" fill-opacity="0.85" stroke="#0b0c0e" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round">
+      <!-- menu -->
+      <path d="M462 610 L440 628 L462 646" fill="none" stroke-width="10"/>
+      <!-- home -->
+      <rect x="552" y="614" width="40" height="28" rx="7" fill="none" stroke-width="8"/>
+      <!-- siri -->
+      <rect x="442" y="718" width="20" height="30" rx="10" stroke="none"/>
+      <path d="M435 739 a17 17 0 0 0 34 0" fill="none" stroke-width="7"/>
+      <!-- play/pause -->
+      <path d="M440 830 L440 866 L468 848 Z" stroke-width="3"/>
+      <!-- âm lượng + / − -->
+      <path d="M572 725 v30 M557 740 h30" fill="none" stroke-width="8"/>
+      <path d="M557 846 h30" fill="none" stroke-width="8"/>
+    </g>
   </g>
-  <rect x="332" y="148" width="360" height="728" rx="84" fill="url(#glass)"/>
-  <g clip-path="url(#body)">
-    <ellipse cx="512" cy="120" rx="300" ry="190" fill="url(#spec)" opacity="0.5"/>
-  </g>
-  <rect x="334" y="150" width="356" height="724" rx="82" fill="none" stroke="url(#rim)" stroke-width="4"/>
-
-  <!-- touchpad phẳng -->
-  <rect x="372" y="188" width="280" height="300" rx="52" fill="url(#pad)"/>
-  <rect x="372" y="188" width="280" height="300" rx="52" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="2"/>
-  <path d="M392 200 H632" stroke="#ffffff" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
-
-  <!-- nút -->
-  <circle cx="436" cy="568" r="38" fill="url(#btn)"/>
-  <circle cx="588" cy="568" r="38" fill="url(#btn)"/>
-  <circle cx="512" cy="568" r="0"/>
-  <!-- menu: mũi tên quay lại -->
-  <path d="M446 548 L424 568 L446 588" fill="none" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- home: màn hình tv -->
-  <rect x="566" y="552" width="44" height="32" rx="8" fill="none" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="10"/>
-
-  <!-- play/pause -->
-  <circle cx="436" cy="684" r="38" fill="url(#btn)"/>
-  <path d="M424 664 L452 684 L424 704 Z" fill="#0b0c0e" fill-opacity="0.85"/>
-  <!-- siri -->
-  <circle cx="588" cy="684" r="38" fill="url(#btn)"/>
-  <rect x="577" y="662" width="22" height="34" rx="11" fill="#0b0c0e" fill-opacity="0.85"/>
-  <path d="M570 684 a18 18 0 0 0 36 0" fill="none" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="8" stroke-linecap="round"/>
-
-  <!-- âm lượng -->
-  <rect x="398" y="768" width="228" height="60" rx="30" fill="url(#btn)"/>
-  <path d="M440 798 H478 M559 798 H597 M578 779 V817" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="10" stroke-linecap="round"/>
 </svg>
