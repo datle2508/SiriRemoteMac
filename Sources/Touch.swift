@@ -456,14 +456,14 @@ final class TouchEngine {
         var vy = max(min(recent.reduce(0) { $0 + $1.y } / span, 6000), -6000)
         guard abs(vx) > 150 || abs(vy) > 150 else { return }
         scrollRemX = 0; scrollRemY = 0
-        var first = true
+        var firstTick = true
         inertiaActive = true
         inertiaTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] t in
             guard let self = self else { t.invalidate(); return }
             vx *= 0.955; vy *= 0.955                                                // ma sát: giảm dần
             if abs(vx) < 30 && abs(vy) < 30 { self.stopInertia(); return }
-            self.emitScroll(vx / 60, vy / 60, phase: 0, momentum: first ? 1 : 2)
-            first = false
+            self.emitScroll(vx / 60, vy / 60, phase: 0, momentum: firstTick ? 1 : 2)
+            firstTick = false
         }
     }
 
