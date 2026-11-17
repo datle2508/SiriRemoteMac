@@ -125,8 +125,8 @@ func postMouse(_ type: CGEventType, at pos: CGPoint, button: CGMouseButton = .le
     e.post(tap: .cghidEventTap)
 }
 
-/// Nguồn sự kiện riêng: không thừa hưởng trạng thái phím bổ trợ của bàn phím thật.
-let mouseSource = CGEventSource(stateID: .privateState)
+/// Nguồn sự kiện mặc định của hệ thống (nguồn "private" làm nhấn touchpad không còn click được).
+let mouseSource: CGEventSource? = nil
 
 /// Sau phím tắt có bổ trợ (⌘, ⌃…) gửi thêm sự kiện nhả bổ trợ để hệ thống không giữ nhầm trạng thái.
 func releaseModifiers() {
