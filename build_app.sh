@@ -12,10 +12,10 @@ HOST="$(uname -m)"                      # arm64 hoặc x86_64
 OTHER="x86_64"; [ "$HOST" = "x86_64" ] && OTHER="arm64"
 
 echo "→ Biên dịch cho $HOST"
-swiftc -O -target "$HOST-apple-macos13" SiriRemoteMac.swift -o "build/SiriRemoteMac-$HOST"
+swiftc -O -target "$HOST-apple-macos13" Sources/*.swift -o "build/SiriRemoteMac-$HOST"
 
 echo "→ Thử biên dịch thêm cho $OTHER (bỏ qua nếu thiếu thư viện)"
-if swiftc -O -target "$OTHER-apple-macos13" SiriRemoteMac.swift -o "build/SiriRemoteMac-$OTHER" >/dev/null 2>&1; then
+if swiftc -O -target "$OTHER-apple-macos13" Sources/*.swift -o "build/SiriRemoteMac-$OTHER" >/dev/null 2>&1; then
     lipo -create "build/SiriRemoteMac-$HOST" "build/SiriRemoteMac-$OTHER" -output "$APP/Contents/MacOS/SiriRemoteMac"
     echo "   → bản universal"
 else

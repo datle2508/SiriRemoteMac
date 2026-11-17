@@ -40,7 +40,7 @@ App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cá
 
 - **Con trỏ + cuộn:** một ngón di chuyển con trỏ, hai ngón cuộn; nhấn touchpad và di chuyển để kéo thả.
 - **Chỉ vuốt / chạm:** không di chuyển con trỏ; vuốt nhanh 4 hướng (`swipeleft`, `swiperight`, `swipeup`, `swipedown`) và chạm 2 ngón (`twofingertap`) chạy hành động bạn gán.
-- Tùy chọn: chạm nhẹ để click, cuộn tự nhiên, tốc độ con trỏ/cuộn. Bật/tắt nhanh ở menu 🎛 → **Bật cảm ứng touchpad**.
+- Tùy chọn: chạm nhẹ để click, cuộn tự nhiên, tốc độ con trỏ/cuộn. Đổi chế độ nhanh ở menu 🎛 → **Chế độ cảm ứng**.
 
 Khóa trong `~/.siriremote.json`: `touchmode` (`cursor`/`swipe`/`off`), `touchspeed`, `scrollspeed`, `naturalscroll`, `tapclick`, `touchfamily`. Cử chỉ cũng có thể đặt riêng cho từng app.
 
@@ -48,14 +48,14 @@ Nếu không thấy phản hồi cảm ứng: bật **Ghi log nút bấm**, tắ
 
 ## Dùng với các đời Siri Remote khác
 
-Cài đặt → tab **Remote**:
+Cài đặt → tab **Nâng cao** (chỉ khi chọn *Mặc định (mọi app)*):
 - **Đời remote:** để *Tự nhận* (theo product ID: `0x266` = đời 1) hoặc chọn tay. Đời 2/3 hiện thêm các nút click ring (giữa/↑/↓/←/→), Back, TV, Mute, Power ở tab *Nút bấm*. Mã HID các nút này **theo chuẩn Consumer Control, chưa kiểm chứng trên máy thật**.
 - **Học nút mới…:** bấm nút trên remote để app ghi nhận mã và đặt tên; dùng khi nút chưa có hoặc mã mặc định không đúng. Lưu trong khóa `custombuttons` của `~/.siriremote.json`.
 - **Mã cảm ứng (family):** đời 1 = `160`, đời 3 = `145` (luôn thử cả hai). Đời khác: bật *Ghi log nút bấm*, xem dòng `MT thiết bị #… family=…` rồi thêm mã vào đây.
 
 ## Cài đặt bằng giao diện
 
-Menu 🎛 → **Cài đặt nút…** (⌘,). Chọn nút, chọn hành động cho *Bấm / Giữ / Nhấn đúp* từ danh sách (hoặc *Mở ứng dụng…*, *Phím tắt…* để tự đặt). Thay đổi được lưu ngay vào `~/.siriremote.json`.
+Menu 🎛 → **Cài đặt…** (⌘,). Có 3 tab: **Nút bấm**, **Cảm ứng**, **Nâng cao**. Nút **Mẫu có sẵn** ở đầu cửa sổ áp dụng nhanh bộ cấu hình cho Nghe nhạc, Xem YouTube, Lướt TikTok, Duyệt web, Thuyết trình (cho mặc định hoặc cho app đang chọn). Chọn nút, chọn hành động cho *Bấm / Giữ / Nhấn đúp* từ danh sách (hoặc *Mở ứng dụng…*, *Phím tắt…* để tự đặt). Thay đổi được lưu ngay vào `~/.siriremote.json`.
 
 **Cấu hình riêng cho từng app:** ở ô *Áp dụng cho*, bấm **＋ Thêm app** (chọn app đang chạy hoặc từ thư mục Applications). Khi app đó đang ở trên cùng, các nút được cấu hình riêng sẽ thay cho mặc định; nút để *Giống mặc định* vẫn dùng cấu hình chung. Ví dụ: Keynote dùng ← → để chuyển slide, YouTube Music dùng Menu/Home chuyển bài.
 
@@ -133,7 +133,7 @@ Cấu hình của bạn được **gộp** lên mặc định; dùng `"none"` đ
 
 ## Cấu trúc
 ```
-SiriRemoteMac.swift   mã nguồn app (một file)
+Sources/              mã nguồn: Action, Config, Controller, Touch, Settings, AppDelegate, main
 build_app.sh          đóng gói .app và .dmg
 icon/                 icon app (SVG + PNG 1024)
 tools/Sniffer.swift   công cụ nghe gói HID để nghiên cứu (không chiếm quyền)
