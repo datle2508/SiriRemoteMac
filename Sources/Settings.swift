@@ -90,6 +90,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let touchHost = NSStackView()
     private let advancedHost = NSStackView()
     private var pages: [NSScrollView] = []
+    private var statusTimer: Timer?
     private let segment = NSSegmentedControl()
 
     /// "gen1" hoặc "gen23": theo lựa chọn trong tab Nâng cao, hoặc tự nhận từ product ID khi để "auto".
@@ -204,6 +205,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         if !centered { window.center(); centered = true }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        // Trạng thái quyền / remote / cảm ứng có thể đổi bất cứ lúc nào: cập nhật định kỳ khi cửa sổ đang mở
+        statusTimer?.invalidate()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in self?.updateStatus() }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        statusTimer?.invalidate()
+        statusTimer = nil
     }
 
     @objc private func pageChanged(_ sender: NSSegmentedControl) { showPage(sender.selectedSegment) }
@@ -395,7 +404,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         buildAdvancedTab()
     }
 
-    private func updateStatus() {
+    func updateStatus() {
         let trusted = AXIsProcessTrusted()
         func dot(_ ok: Bool, _ text: String) -> NSAttributedString {
             let r = NSMutableAttributedString(string: "● ", attributes: [.foregroundColor: ok ? NSColor.systemGreen : NSColor.systemOrange])

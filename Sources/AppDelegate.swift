@@ -121,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func refresh() {
+        settingsWindow?.updateStatus()
         let trusted = AXIsProcessTrusted()
         item.button?.appearsDisabled = !controller.isConnected
         statusLine.title = !trusted ? "⚠ Thiếu quyền Accessibility (nút sẽ không có tác dụng)"
