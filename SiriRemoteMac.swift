@@ -20,6 +20,7 @@ enum Action {
     case click
     case scroll(Int32)          // +1 lên, -1 xuống
     case command(String, [String])
+    case nav(Bool)                  // true = Back, false = Forward (hiệu ứng vuốt như Magic Trackpad)
     case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
 
     private static let keyCodes: [String: CGKeyCode] = [
@@ -41,6 +42,8 @@ enum Action {
     static func parse(_ spec: String) -> Action? {
         if spec == "click" { return .click }
         if spec == "toggletouch" { return .toggleTouch }
+        if spec == "nav:back" { return .nav(true) }
+        if spec == "nav:forward" { return .nav(false) }
         if spec == "sleep" { return .command("/usr/bin/pmset", ["sleepnow"]) }
         if spec == "displaysleep" { return .command("/usr/bin/pmset", ["displaysleepnow"]) }
         let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
@@ -96,6 +99,8 @@ enum Action {
             try? p.run()
         case .toggleTouch:
             toggleTouchMode()
+        case .nav(let back):
+            navSwipe(back: back)
         case .click, .scroll:
             break   // xử lý riêng vì cần biết lúc nhấn và lúc thả
         }
@@ -145,6 +150,7 @@ let defaultMap: [String: String] = [
     "touchmode": "cursor",          // cảm ứng: cursor (con trỏ + cuộn + vuốt), swipe (chỉ vuốt/chạm), off
     "touchspeed": "1.5",            // tốc độ con trỏ (0.3 – 5)
     "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
+    "navinvert": "0",               // 1 = đảo chiều hiệu ứng Back/Forward (nav:back / nav:forward)
     "naturalscroll": "1",           // 1 = cuộn tự nhiên (đảo chiều), 0 = ngược lại
     "tapclick": "0",                // 1 = chạm nhẹ để click
     "touchfamily": "160,145",       // mã họ thiết bị MultitouchSupport của remote (xem log khi bật "Ghi log")
@@ -176,7 +182,7 @@ enum TouchMode: String { case off, cursor, swipe }
 
 /// Cấu hình riêng mặc định cho một số app (chỉ thêm một lần, sau đó bạn tự do sửa/xóa).
 let seedApps: [String: [String: String]] = [
-    "com.apple.Safari": ["menu": "key:cmd+[", "home": "key:cmd+]"],     // Menu = Back, Home = Forward
+    "com.apple.Safari": ["menu": "nav:back", "home": "nav:forward"],     // Menu = Back, Home = Forward (có hiệu ứng vuốt)
 ]
 
 func migrateConfig() {
@@ -187,7 +193,42 @@ func migrateConfig() {
         c.seeded.append(bid)
         changed = true
     }
+    // Nâng cấp một lần: bản cũ dùng phím cmd+[ / cmd+] (không có hiệu ứng vuốt)
+    let upgrade = "com.apple.Safari:nav"
+    if !c.seeded.contains(upgrade) {
+        if c.apps["com.apple.Safari"]?["menu"] == "key:cmd+[" && c.apps["com.apple.Safari"]?["home"] == "key:cmd+]" {
+            c.apps["com.apple.Safari"]?["menu"] = "nav:back"
+            c.apps["com.apple.Safari"]?["home"] = "nav:forward"
+        }
+        c.seeded.append(upgrade)
+        changed = true
+    }
     if changed || !FileManager.default.fileExists(atPath: configPath) { c.save() }
+}
+
+var navInvert = false
+
+/// Giả lập cú vuốt hai ngón ngang của trackpad (chuỗi sự kiện cuộn có pha) để Safari/Chrome chạy
+/// hiệu ứng Back/Forward như Magic Trackpad. Hướng: ngón tay sang phải = Back.
+func navSwipe(back: Bool) {
+    let dir: Double = (back ? 1 : -1) * (navInvert ? -1 : 1)
+    func post(_ delta: Int32, _ phase: Int64) {
+        guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+                              wheel1: 0, wheel2: delta, wheel3: 0) else { return }
+        if let f = CGEventField(rawValue: 88) { e.setIntegerValueField(f, value: 1) }       // isContinuous
+        if let f = CGEventField(rawValue: 99) { e.setIntegerValueField(f, value: phase) }   // scrollPhase
+        e.post(tap: .cghidEventTap)
+    }
+    post(0, 1)                                    // began
+    var i = 0
+    let frames = 18
+    Timer.scheduledTimer(withTimeInterval: 0.012, repeats: true) { t in
+        i += 1
+        let progress = Double(i) / Double(frames)
+        let delta = Int32((dir * 45 * (1.2 - progress)).rounded())     // chậm dần như ngón tay thật
+        post(delta, 2)                            // changed
+        if i >= frames { t.invalidate(); post(0, 4) }                  // ended
+    }
 }
 
 /// Đổi qua lại giữa chế độ con trỏ và chế độ vuốt/chạm; lưu vào file cấu hình.
@@ -240,7 +281,7 @@ func loadMap() -> [String: Action] {
                     for (bid, d) in (v as? [String: Any]) ?? [:] {
                         for (kk, vv) in (d as? [String: Any]) ?? [:] {
                             let key = normalizeKey(kk), spec = "\(vv)"
-                            if ["HOLDTIME", "DOUBLETIME", "REMOTEMODEL", "TOUCHMODE", "TOUCHSPEED", "SCROLLSPEED", "NATURALSCROLL", "TAPCLICK", "TOUCHFAMILY"].contains(key) { continue }
+                            if ["HOLDTIME", "DOUBLETIME", "REMOTEMODEL", "NAVINVERT", "TOUCHMODE", "TOUCHSPEED", "SCROLLSPEED", "NATURALSCROLL", "TAPCLICK", "TOUCHFAMILY"].contains(key) { continue }
                             if spec.isEmpty || spec == "none" { appDisabled[bid, default: []].insert(key); continue }
                             if let a = Action.parse(spec) { appOverrides[bid, default: [:]][key] = a }
                             else { log("Hành động không hợp lệ trong \(bid): \(kk) → \(spec)") }
@@ -267,6 +308,7 @@ func loadMap() -> [String: Action] {
     if let v = take("TOUCHMODE") { touchMode = TouchMode(rawValue: v.lowercased()) ?? .cursor }
     if let v = take("TOUCHSPEED"), let d = Double(v) { touchSpeed = min(max(d, 0.3), 5.0) }
     if let v = take("SCROLLSPEED"), let d = Double(v) { scrollSpeed = min(max(d, 0.2), 4.0) }
+    if let v = take("NAVINVERT") { navInvert = (v == "1" || v.lowercased() == "true") }
     if let v = take("NATURALSCROLL") { naturalScroll = !(v == "0" || v.lowercased() == "false") }
     if let v = take("TAPCLICK") { tapClick = (v == "1" || v.lowercased() == "true") }
     if let v = take("TOUCHFAMILY") {   // danh sách cách nhau bằng dấu phẩy; luôn gồm 160 và 145
@@ -834,6 +876,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ("click", "Click chuột"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống"),
         ("key:left", "Phím ←"), ("key:right", "Phím →"), ("key:up", "Phím ↑"), ("key:down", "Phím ↓"),
         ("key:space", "Phím Space"), ("key:return", "Phím Enter"), ("key:escape", "Phím Esc"),
+        ("nav:back", "Back (hiệu ứng vuốt)"), ("nav:forward", "Forward (hiệu ứng vuốt)"),
+        ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
         ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
         ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
         ("toggletouch", "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)"),
@@ -1134,7 +1178,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let s2 = NSStackView(views: [NSTextField(labelWithString: "Tốc độ cuộn:"), slider("scrollspeed", 0.2, 3, 1.0)])
             for r in [s1, s2] { r.orientation = .horizontal; r.spacing = 8 }
             for v in [modeRow, check("naturalscroll", "Cuộn tự nhiên (đảo chiều)", "1"),
-                      check("tapclick", "Chạm nhẹ để click", "0"), s1, s2] {
+                      check("tapclick", "Chạm nhẹ để click", "0"),
+                      check("navinvert", "Đảo chiều hiệu ứng Back/Forward", "0"), s1, s2] {
                 touchHost.addArrangedSubview(v)
             }
         }
