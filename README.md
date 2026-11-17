@@ -32,6 +32,10 @@ Menu 🎛 → **Khởi động cùng macOS** (chỉ khi chạy từ `.app`).
 
 ## Cảm ứng touchpad
 
+- **Giữ nút Siri** (mặc định) để đổi nhanh giữa chế độ *Con trỏ* và *Vuốt/chạm*; có tiếng báo và tên chế độ hiện cạnh biểu tượng thanh menu. Hành động `toggletouch` gán được cho nút/cử chỉ khác.
+- Ở chế độ Con trỏ, nếu bạn đã gán hành động cho một hướng vuốt, con trỏ **đứng yên** khi bạn vuốt nhanh theo hướng đó. Di chuyển chậm, chéo, hoặc theo hướng chưa gán thì con trỏ chạy bình thường.
+- **Safari** có sẵn cấu hình riêng (thêm một lần, sửa/xóa tùy ý): Menu = Back (`cmd+[`), Home = Forward (`cmd+]`).
+
 App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cách mà HyperVibe, Remote Buddy… dùng). Không cần quyền thêm ngoài Accessibility.
 
 - **Con trỏ + cuộn:** một ngón di chuyển con trỏ, hai ngón cuộn; nhấn touchpad và di chuyển để kéo thả.

@@ -20,6 +20,7 @@ enum Action {
     case click
     case scroll(Int32)          // +1 lên, -1 xuống
     case command(String, [String])
+    case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
 
     private static let keyCodes: [String: CGKeyCode] = [
         "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
@@ -39,6 +40,7 @@ enum Action {
     /// "key:cmd+space", "media:playpause", "app:Keynote", "scroll:up", "click"
     static func parse(_ spec: String) -> Action? {
         if spec == "click" { return .click }
+        if spec == "toggletouch" { return .toggleTouch }
         if spec == "sleep" { return .command("/usr/bin/pmset", ["sleepnow"]) }
         if spec == "displaysleep" { return .command("/usr/bin/pmset", ["displaysleepnow"]) }
         let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
@@ -92,6 +94,8 @@ enum Action {
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = args
             try? p.run()
+        case .toggleTouch:
+            toggleTouchMode()
         case .click, .scroll:
             break   // xử lý riêng vì cần biết lúc nhấn và lúc thả
         }
@@ -132,6 +136,7 @@ let defaultMap: [String: String] = [
     "home": "media:next",           // bài kế tiếp (bấm nhanh)
     "home+hold": "sleep",           // giữ nút đủ lâu để Mac sleep
     "siri": "app:Siri",             // mở Siri
+    "siri+hold": "toggletouch",     // giữ Siri: đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
     "touchpad": "click",            // nhấn touchpad = click chuột trái
     "playpause": "media:playpause",
     "volup": "media:volumeup",
@@ -168,6 +173,34 @@ var holdDelaySeconds: TimeInterval = 0.8   // đổi bằng khóa "holdtime" tro
 var doubleDelaySeconds: TimeInterval = 0.3 // khoảng cách tối đa giữa hai lần nhấn đúp, khóa "doubletime"
 
 enum TouchMode: String { case off, cursor, swipe }
+
+/// Cấu hình riêng mặc định cho một số app (chỉ thêm một lần, sau đó bạn tự do sửa/xóa).
+let seedApps: [String: [String: String]] = [
+    "com.apple.Safari": ["menu": "key:cmd+[", "home": "key:cmd+]"],     // Menu = Back, Home = Forward
+]
+
+func migrateConfig() {
+    var c = ConfigFile.load()
+    var changed = false
+    for (bid, specs) in seedApps where !c.seeded.contains(bid) {
+        if c.apps[bid] == nil { c.apps[bid] = specs }
+        c.seeded.append(bid)
+        changed = true
+    }
+    if changed || !FileManager.default.fileExists(atPath: configPath) { c.save() }
+}
+
+/// Đổi qua lại giữa chế độ con trỏ và chế độ vuốt/chạm; lưu vào file cấu hình.
+func toggleTouchMode() {
+    var c = ConfigFile.load()
+    let next = touchMode == .cursor ? "swipe" : "cursor"
+    c.global["touchmode"] = next
+    c.save()
+    controller.reloadMap()
+    NSSound(named: NSSound.Name(next == "cursor" ? "Pop" : "Tink"))?.play()
+    appDelegate.flash(next == "cursor" ? "Con trỏ" : "Vuốt/chạm")
+    appDelegate.refresh()
+}
 var touchMode: TouchMode = .cursor
 var touchSpeed = 1.5
 var scrollSpeed = 1.0
@@ -202,7 +235,7 @@ func loadMap() -> [String: Action] {
     if let data = FileManager.default.contents(atPath: configPath) {
         if let user = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             for (k, v) in user {
-                if k == "custombuttons" { continue }
+                if k == "custombuttons" || k == "seededapps" { continue }
                 if k == "apps" {
                     for (bid, d) in (v as? [String: Any]) ?? [:] {
                         for (kk, vv) in (d as? [String: Any]) ?? [:] {
@@ -310,6 +343,9 @@ final class TouchEngine {
     private var travel: Float = 0
     private var scrollRemX: Float = 0
     private var scrollRemY: Float = 0
+    private var cursorDecided = false       // false: đang giữ con trỏ đứng yên, chờ xem có phải cú vuốt không
+    private var bufX: Float = 0
+    private var bufY: Float = 0
 
     var isRunning: Bool { !devices.isEmpty }
 
@@ -373,15 +409,40 @@ final class TouchEngine {
             startTime = timestamp; startCentroid = c; lastCentroid = c
             maxFingers = active.count; lastCount = active.count; travel = 0
             scrollRemX = 0; scrollRemY = 0
+            cursorDecided = false; bufX = 0; bufY = 0
             return
         }
         maxFingers = max(maxFingers, active.count)
-        if active.count != lastCount { lastCentroid = c; lastCount = active.count; return }  // tránh nhảy khi đổi số ngón
+        if active.count != lastCount {      // tránh nhảy khi đổi số ngón
+            lastCentroid = c; lastCount = active.count
+            if active.count > 1 { cursorDecided = true; bufX = 0; bufY = 0 }
+            return
+        }
         let dx = c.x - lastCentroid.x, dy = c.y - lastCentroid.y
         travel += hypotf(dx, dy)
         lastCentroid = c
         guard touchMode == .cursor else { return }
-        if active.count == 1 { moveCursor(dx, dy) } else { scroll(dx, dy) }
+        if active.count == 1 { steer(dx, dy, c, timestamp) } else { cursorDecided = true; scroll(dx, dy) }
+    }
+
+    /// Một ngón: nếu chuyển động trông như cú vuốt đã gán hành động thì giữ con trỏ đứng yên,
+    /// ngược lại (di chuyển chậm, hướng chéo, hướng chưa gán, hoặc quá 0,3 s) mới cho con trỏ chạy.
+    private func steer(_ dx: Float, _ dy: Float, _ c: (x: Float, y: Float), _ ts: Double) {
+        if cursorDecided { moveCursor(dx, dy); return }
+        bufX += dx; bufY += dy
+        let ddx = c.x - startCentroid.x, ddy = c.y - startCentroid.y
+        let adx = abs(ddx), ady = abs(ddy)
+        let far = max(adx, ady)
+        var decide = mouseButtonDown || ts - startTime >= 0.3
+        if !decide, far >= 0.04 {
+            let key = adx > ady ? (ddx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (ddy > 0 ? "SWIPEUP" : "SWIPEDOWN")
+            if far >= 2 * min(adx, ady), controller.action(for: key) != nil { return }   // giống cú vuốt: giữ yên
+            decide = true
+        }
+        guard decide else { return }
+        cursorDecided = true
+        moveCursor(bufX, bufY)
+        bufX = 0; bufY = 0
     }
 
     private func endSession(_ ts: Double) {
@@ -392,15 +453,16 @@ final class TouchEngine {
         let fingers = maxFingers
         if debugLog { log("TOUCH kết thúc: ngón=\(fingers) dx=\(dx) dy=\(dy) thời gian=\(dur) quãng=\(travel)") }
         if fingers == 1 {
-            let minDist: Float = touchMode == .cursor ? 0.35 : 0.2
-            let maxTime = touchMode == .cursor ? 0.35 : 0.7
+            let minDist: Float = touchMode == .cursor ? 0.3 : 0.2
+            let maxTime = touchMode == .cursor ? 0.4 : 0.7
             let adx = abs(dx), ady = abs(dy)
             if dur < maxTime, max(adx, ady) >= minDist, max(adx, ady) >= 2 * min(adx, ady) {
                 let key = adx > ady ? (dx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (dy > 0 ? "SWIPEUP" : "SWIPEDOWN")
                 fire(key)
                 return
             }
-            if tapClick, dur < 0.25, travel < 0.04 { click() }
+            if travel >= 0.04, touchMode == .cursor, !cursorDecided { moveCursor(bufX, bufY) }   // không phải vuốt: trả lại chuyển động đã giữ
+            else if tapClick, dur < 0.25, travel < 0.04 { click() }
         } else if fingers == 2, dur < 0.25, travel < 0.06 {
             fire("TWOFINGERTAP")
         }
@@ -687,6 +749,7 @@ struct ConfigFile {
     var global: [String: String] = [:]
     var apps: [String: [String: String]] = [:]
     var custom: [String: String] = [:]
+    var seeded: [String] = []
 
     static func load() -> ConfigFile {
         var c = ConfigFile()
@@ -696,7 +759,9 @@ struct ConfigFile {
         for (k, v) in defaultMap { c.global[canonicalKey(k)] = v }
         if let obj = parsed {
             for (k, v) in obj {
-                if k == "custombuttons" {
+                if k == "seededapps" {
+                    c.seeded = (v as? [String]) ?? []
+                } else if k == "custombuttons" {
                     for (n, code) in (v as? [String: Any]) ?? [:] { c.custom[n.lowercased()] = "\(code)".uppercased() }
                 } else if k == "apps" {
                     for (bid, d) in (v as? [String: Any]) ?? [:] {
@@ -716,6 +781,7 @@ struct ConfigFile {
         var dict: [String: Any] = global
         if !apps.isEmpty { dict["apps"] = apps }
         if !custom.isEmpty { dict["custombuttons"] = custom }
+        if !seeded.isEmpty { dict["seededapps"] = seeded }
         guard let d = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) else { return }
         try? d.write(to: URL(fileURLWithPath: configPath), options: .atomic)
     }
@@ -770,6 +836,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ("key:space", "Phím Space"), ("key:return", "Phím Enter"), ("key:escape", "Phím Esc"),
         ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
         ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
+        ("toggletouch", "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)"),
     ]
 
     override init() {
@@ -1318,6 +1385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
 
+        migrateConfig()
         controller.start()
         touchEngine.start(force: true)
         refresh()
@@ -1347,6 +1415,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         img.isTemplate = true
         return img
+    }
+
+    /// Hiện chữ ngắn cạnh biểu tượng thanh menu (báo đã đổi chế độ).
+    func flash(_ text: String) {
+        item.button?.imagePosition = .imageLeft
+        item.button?.title = " " + text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.item.button?.title = ""
+            self?.item.button?.imagePosition = .imageOnly
+        }
     }
 
     func refresh() {
