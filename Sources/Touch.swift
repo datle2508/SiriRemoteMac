@@ -105,7 +105,7 @@ func toggleTouchMode() {
     c.save()
     controller.reloadMap()
     NSSound(named: NSSound.Name(next == "cursor" ? "Pop" : "Tink"))?.play()
-    appDelegate.flash(next == "cursor" ? "Con trỏ" : "Vuốt/chạm")
+    appDelegate.flash(next == "cursor" ? T("Con trỏ") : T("Vuốt/chạm"))
     appDelegate.refresh()
 }
 // MARK: - Cảm ứng (MultitouchSupport, framework riêng của Apple)
@@ -477,9 +477,9 @@ final class TouchEngine {
 extension TouchMode {
     var title: String {
         switch self {
-        case .cursor: return "Con trỏ"
-        case .swipe: return "Vuốt/chạm"
-        case .off: return "Tắt"
+        case .cursor: return T("Con trỏ")
+        case .swipe: return T("Vuốt/chạm")
+        case .off: return T("Tắt")
         }
     }
 }

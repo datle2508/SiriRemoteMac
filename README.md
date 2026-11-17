@@ -151,3 +151,8 @@ tools/Sniffer.swift   công cụ nghe gói HID để nghiên cứu (không chi�
 ```
 
 Công cụ nghe HID: `swiftc -O tools/Sniffer.swift -o sniffer && ./sniffer | tee sniffer.log`.
+
+## Ngôn ngữ / Language
+
+Giao diện hỗ trợ **tiếng Việt** và **English**. Mặc định tự theo ngôn ngữ hệ thống (tiếng Việt → Việt, còn lại → English); đổi trong Cài đặt → Nâng cao → Ngôn ngữ (hoặc khóa `"language": "auto" | "vi" | "en"` trong `~/.siriremote.json`) rồi mở lại app.
+The UI is available in Vietnamese and English. It follows the system language by default; change it in Settings → Advanced → Language (or `"language": "auto" | "vi" | "en"` in `~/.siriremote.json`) and restart the app.

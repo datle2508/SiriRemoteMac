@@ -36,9 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = AppDelegate.makeMenuIcon()
         item.button?.imagePosition = .imageOnly
 
-        loginItem.title = "Khởi động cùng macOS"; loginItem.action = #selector(toggleLogin); loginItem.target = self
-        seizeItem.title = "Chiếm quyền remote (khi gán lại Vol/Play)"; seizeItem.action = #selector(toggleSeize); seizeItem.target = self
-        debugItem.title = "Ghi log nút bấm"; debugItem.action = #selector(toggleDebug); debugItem.target = self
+        loginItem.title = T("Khởi động cùng macOS"); loginItem.action = #selector(toggleLogin); loginItem.target = self
+        seizeItem.title = T("Chiếm quyền remote (khi gán lại Vol/Play)"); seizeItem.action = #selector(toggleSeize); seizeItem.target = self
+        debugItem.title = T("Ghi log nút bấm"); debugItem.action = #selector(toggleDebug); debugItem.target = self
 
         var modeMenuItems: [NSMenuItem] = []
         for mode in [TouchMode.cursor, .swipe, .off] {
@@ -50,15 +50,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         for m in [statusLine, .separator(),
-                  entry("Cài đặt…", #selector(openSettings), key: ","),
-                  submenu("Chế độ cảm ứng", modeMenuItems), .separator(),
+                  entry(T("Cài đặt…"), #selector(openSettings), key: ","),
+                  submenu(T("Chế độ cảm ứng"), modeMenuItems), .separator(),
                   loginItem,
-                  submenu("Nâng cao", [seizeItem, debugItem, .separator(),
-                                       entry("Mở file cấu hình", #selector(openConfig)),
-                                       entry("Nạp lại cấu hình", #selector(reload)),
-                                       entry("Mở file log", #selector(openLog))]),
+                  submenu(T("Nâng cao"), [seizeItem, debugItem, .separator(),
+                                       entry(T("Mở file cấu hình"), #selector(openConfig)),
+                                       entry(T("Nạp lại cấu hình"), #selector(reload)),
+                                       entry(T("Mở file log"), #selector(openLog))]),
                   .separator(),
-                  entry("Thoát", #selector(quit), key: "q")] {
+                  entry(T("Thoát"), #selector(quit), key: "q")] {
             menu.addItem(m)
         }
         item.menu = menu
@@ -124,8 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.updateStatus()
         let trusted = AXIsProcessTrusted()
         item.button?.appearsDisabled = !controller.isConnected
-        statusLine.title = !trusted ? "⚠ Thiếu quyền Accessibility (nút sẽ không có tác dụng)"
-            : controller.isConnected ? "Remote: đã kết nối" : "Remote: chưa thấy (ghép qua Bluetooth)"
+        statusLine.title = !trusted ? T("⚠ Thiếu quyền Accessibility (nút sẽ không có tác dụng)")
+            : controller.isConnected ? T("Remote: đã kết nối") : T("Remote: chưa thấy (ghép qua Bluetooth)")
         seizeItem.state = controller.seize ? .on : .off
         debugItem.state = debugLog ? .on : .off
         for (mode, mi) in modeItems { mi.state = mode == touchMode ? .on : .off }
@@ -151,8 +151,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             log("Không đổi được khởi động cùng macOS: \(error.localizedDescription)")
             let a = NSAlert()
-            a.messageText = "Không bật được khởi động cùng macOS"
-            a.informativeText = "Hãy chép SiriRemoteMac.app vào thư mục Applications rồi mở từ đó, hoặc thêm thủ công trong System Settings → General → Login Items.\n\n\(error.localizedDescription)"
+            a.messageText = T("Không bật được khởi động cùng macOS")
+            a.informativeText = TF("Hãy chép SiriRemoteMac.app vào thư mục Applications rồi mở từ đó, hoặc thêm thủ công trong System Settings → General → Login Items.\n\n%@", error.localizedDescription)
             a.runModal()
         }
         refresh()

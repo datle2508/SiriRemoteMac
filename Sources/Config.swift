@@ -133,7 +133,7 @@ var appDisabled: [String: Set<String>] = [:]     // nút bị tắt ("none") ri�
 /// Các khóa là tùy chọn (không phải nút bấm / cử chỉ).
 let settingKeys: Set<String> = ["holdtime", "doubletime", "remotemodel", "navinvert", "touchmode",
                                 "touchspeed", "scrollspeed", "naturalscroll", "tapclick", "touchfamily",
-                                "scrollmomentum", "clicksteady", "navduration", "navdistance"]
+                                "scrollmomentum", "clicksteady", "navduration", "navdistance", "language"]
 
 /// Đọc file cấu hình (qua ConfigFile) → bản đồ nút → hành động; cập nhật các tùy chọn toàn cục.
 func loadMap() -> [String: Action] {

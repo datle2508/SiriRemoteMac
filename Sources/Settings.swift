@@ -1,5 +1,5 @@
 // Settings.swift
-// Cửa sổ cài đặt: chọn "Áp dụng cho" (mặc định hoặc một app) → tab Nút bấm / Cảm ứng / Nâng cao.
+// Cửa sổ cài đặt: chọn T("Áp dụng cho") (mặc định hoặc một app) → tab Nút bấm / Cảm ứng / Nâng cao.
 // Mọi thay đổi được lưu ngay vào ~/.siriremote.json.
 
 import Cocoa
@@ -14,27 +14,27 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ("playpause", "Play/Pause"), ("volup", "Vol +"), ("voldown", "Vol −"),
     ]
     private static let gen23Rows: [(String, String)] = [
-        ("select", "Click ring: giữa"), ("up", "Click ring ↑"), ("down", "Click ring ↓"),
+        ("select", T("Click ring: giữa")), ("up", "Click ring ↑"), ("down", "Click ring ↓"),
         ("left", "Click ring ←"), ("right", "Click ring →"), ("back", "Back"), ("tv", "TV"),
         ("mute", "Mute"), ("power", "Power"),
     ]
     private static let gestureRows: [(String, String)] = [
-        ("swipeleft", "Vuốt trái"), ("swiperight", "Vuốt phải"), ("swipeup", "Vuốt lên"),
-        ("swipedown", "Vuốt xuống"), ("twofingertap", "Chạm 2 ngón"),
+        ("swipeleft", T("Vuốt trái")), ("swiperight", T("Vuốt phải")), ("swipeup", T("Vuốt lên")),
+        ("swipedown", T("Vuốt xuống")), ("twofingertap", T("Chạm 2 ngón")),
     ]
     private static let actionGroups: [(String, [(String, String)])] = [
-        ("Media", [("media:playpause", "Phát / Dừng"), ("media:next", "Bài kế tiếp"), ("media:previous", "Bài trước"),
-                   ("media:fast", "Tua tới"), ("media:rewind", "Tua lui"), ("media:volumeup", "Tăng âm lượng"),
-                   ("media:volumedown", "Giảm âm lượng"), ("media:mute", "Tắt tiếng")]),
-        ("Phím", [("key:left", "Phím ←"), ("key:right", "Phím →"), ("key:up", "Phím ↑"), ("key:down", "Phím ↓"),
+        ("Media", [("media:playpause", T("Phát / Dừng")), ("media:next", T("Bài kế tiếp")), ("media:previous", T("Bài trước")),
+                   ("media:fast", T("Tua tới")), ("media:rewind", T("Tua lui")), ("media:volumeup", T("Tăng âm lượng")),
+                   ("media:volumedown", T("Giảm âm lượng")), ("media:mute", T("Tắt tiếng"))]),
+        (T("Phím"), [("key:left", T("Phím ←")), ("key:right", T("Phím →")), ("key:up", T("Phím ↑")), ("key:down", T("Phím ↓")),
                   ("key:space", "Space"), ("key:return", "Enter"), ("key:escape", "Esc"),
                   ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
                   ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
-                  ("nav:back", "Back (thử nghiệm: hiệu ứng vuốt)"), ("nav:forward", "Forward (thử nghiệm: hiệu ứng vuốt)")]),
-        ("Chuột", [("click", "Click chuột"), ("rightclick", "Click phải"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống")]),
-        ("Hệ thống", [("mission", "Mission Control"), ("expose", "Exposé (cửa sổ của app)"), ("screensaver", "Màn hình chờ"),
-                      ("showdesktop", "Hiện màn hình nền"), ("lockscreen", "Khóa màn hình"), ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
-                      ("toggletouch", "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)")]),
+                  ("nav:back", T("Back (thử nghiệm: hiệu ứng vuốt)")), ("nav:forward", T("Forward (thử nghiệm: hiệu ứng vuốt)"))]),
+        (T("Chuột"), [("click", T("Click chuột")), ("rightclick", T("Click phải")), ("scroll:up", T("Cuộn lên")), ("scroll:down", T("Cuộn xuống"))]),
+        (T("Hệ thống"), [("mission", "Mission Control"), ("expose", T("Exposé (cửa sổ của app)")), ("screensaver", T("Màn hình chờ")),
+                      ("showdesktop", T("Hiện màn hình nền")), ("lockscreen", T("Khóa màn hình")), ("sleep", T("Cho Mac ngủ")), ("displaysleep", T("Tắt màn hình")),
+                      ("toggletouch", T("Đổi chế độ cảm ứng (con trỏ ↔ vuốt)"))]),
     ]
     /// Biểu tượng SF Symbols cho từng hành động / hàng (nếu hệ thống không có thì bỏ qua, không lỗi).
     private static let icons: [String: String] = [
@@ -61,16 +61,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     /// Mẫu cấu hình nhanh: áp dụng cho mặc định hoặc cho app đang chọn.
     private static let templates: [(String, [String: String])] = [
-        ("Nghe nhạc", ["touchpad": "media:playpause", "menu": "media:previous", "home": "media:next",
+        (T("Nghe nhạc"), ["touchpad": "media:playpause", "menu": "media:previous", "home": "media:next",
                        "swipeleft": "media:previous", "swiperight": "media:next",
                        "swipeup": "media:volumeup", "swipedown": "media:volumedown"]),
-        ("Xem YouTube", ["touchpad": "key:k", "playpause": "key:k", "touchpad+double": "key:shift+n",
+        (T("Xem YouTube"), ["touchpad": "key:k", "playpause": "key:k", "touchpad+double": "key:shift+n",
                          "swipeleft": "key:j", "swiperight": "key:l", "swipeup": "key:up", "swipedown": "key:down",
                          "home": "key:f", "menu": "key:escape"]),
-        ("Lướt TikTok", ["touchpad": "key:space", "swipeup": "key:down", "swipedown": "key:up",
+        (T("Lướt TikTok"), ["touchpad": "key:space", "swipeup": "key:down", "swipedown": "key:up",
                          "home": "key:m", "menu": "key:escape"]),
-        ("Duyệt web", ["menu": "key:cmd+[", "home": "key:cmd+]", "swipeup": "scroll:down", "swipedown": "scroll:up"]),
-        ("Thuyết trình", ["touchpad": "key:right", "menu": "key:left", "home": "key:escape",
+        (T("Duyệt web"), ["menu": "key:cmd+[", "home": "key:cmd+]", "swipeup": "scroll:down", "swipedown": "scroll:up"]),
+        (T("Thuyết trình"), ["touchpad": "key:right", "menu": "key:left", "home": "key:escape",
                           "swipeleft": "key:right", "swiperight": "key:left"]),
     ]
 
@@ -83,9 +83,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private let profilePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let templatePopup = NSPopUpButton(frame: .zero, pullsDown: true)
-    private let removeButton = NSButton(title: "Xóa app này", target: nil, action: nil)
+    private let removeButton = NSButton(title: T("Xóa app này"), target: nil, action: nil)
     private let statusLabel = NSTextField(labelWithString: "")
-    private let permButton = NSButton(title: "Cấp quyền…", target: nil, action: nil)
+    private let permButton = NSButton(title: T("Cấp quyền…"), target: nil, action: nil)
     private let buttonsHost = NSStackView()
     private let touchHost = NSStackView()
     private let advancedHost = NSStackView()
@@ -103,7 +103,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var buttonRows: [(String, String)] {
         var r = SettingsWindow.baseRows
         if effectiveModel == "gen23" { r += SettingsWindow.gen23Rows }
-        for name in cfg.custom.keys.sorted() where !r.contains(where: { $0.0 == name }) { r.append((name, "Nút “\(name)”")) }
+        for name in cfg.custom.keys.sorted() where !r.contains(where: { $0.0 == name }) { r.append((name, TF("Nút “%@”", name))) }
         return r
     }
 
@@ -114,18 +114,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         super.init()
         window.title = "SiriRemoteMac"
-        window.subtitle = "Cài đặt"
+        window.subtitle = T("Cài đặt")
         window.isReleasedWhenClosed = false
         window.delegate = self
 
         // Hàng 1: áp dụng cho + mẫu
         profilePopup.target = self; profilePopup.action = #selector(profileChanged(_:))
         profilePopup.widthAnchor.constraint(equalToConstant: 210).isActive = true
-        let addButton = NSButton(title: "Thêm app", target: self, action: #selector(addApp(_:)))
+        let addButton = NSButton(title: T("Thêm app"), target: self, action: #selector(addApp(_:)))
         addButton.image = symbol("plus"); addButton.imagePosition = .imageLeading
-        removeButton.title = "Xóa"; removeButton.image = symbol("trash"); removeButton.imagePosition = .imageLeading
+        removeButton.title = T("Xóa"); removeButton.image = symbol("trash"); removeButton.imagePosition = .imageLeading
         removeButton.target = self; removeButton.action = #selector(removeApp)
-        templatePopup.addItem(withTitle: "Mẫu có sẵn")
+        templatePopup.addItem(withTitle: T("Mẫu có sẵn"))
         templatePopup.item(at: 0)?.image = symbol("wand.and.stars")
         for (i, t) in SettingsWindow.templates.enumerated() {
             let mi = NSMenuItem(title: t.0, action: #selector(applyTemplate(_:)), keyEquivalent: "")
@@ -135,10 +135,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let row1 = hstack([iconLabel("app.dashed", "Áp dụng cho"), profilePopup, addButton, removeButton, spacer, templatePopup])
+        let row1 = hstack([iconLabel("app.dashed", T("Áp dụng cho")), profilePopup, addButton, removeButton, spacer, templatePopup])
 
         // Hàng 2: trạng thái
-        permButton.title = "Cấp quyền…"
+        permButton.title = T("Cấp quyền…")
         permButton.target = self; permButton.action = #selector(openAccessibility)
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.lineBreakMode = .byTruncatingTail
@@ -147,7 +147,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         // Thanh chuyển trang
         segment.segmentCount = 3
-        for (i, (title, sym)) in [("Nút bấm", "av.remote"), ("Cảm ứng", "hand.point.up.left"), ("Nâng cao", "slider.horizontal.3")].enumerated() {
+        for (i, (title, sym)) in [(T("Nút bấm"), "av.remote"), (T("Cảm ứng"), "hand.point.up.left"), (T("Nâng cao"), "slider.horizontal.3")].enumerated() {
             segment.setLabel(title, forSegment: i)
             segment.setImage(symbol(sym), forSegment: i)
             segment.setWidth(130, forSegment: i)
@@ -173,7 +173,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         pageHost.setContentHuggingPriority(.defaultLow, for: .vertical)
         pageHost.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let footer = note("Mọi thay đổi được lưu ngay. “↩ Mặc định” nghĩa là dùng cấu hình chung; cấu hình riêng áp dụng cho app đang ở trên cùng.")
+        let footer = note(T("Mọi thay đổi được lưu ngay. “↩ Mặc định” nghĩa là dùng cấu hình chung; cấu hình riêng áp dụng cho app đang ở trên cùng."))
 
         let segRow = NSView()
         segment.translatesAutoresizingMaskIntoConstraints = false
@@ -362,10 +362,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func label(for spec: String?) -> String {
-        guard let spec = spec, spec != "none", !spec.isEmpty else { return "Không làm gì" }
+        guard let spec = spec, spec != "none", !spec.isEmpty else { return T("Không làm gì") }
         if let p = SettingsWindow.allPresets.first(where: { $0.0 == spec }) { return p.1 }
-        if spec.hasPrefix("app:") { return "Mở " + String(spec.dropFirst(4)) }
-        if spec.hasPrefix("key:") { return "Phím " + String(spec.dropFirst(4)) }
+        if spec.hasPrefix("app:") { return T("Mở ") + String(spec.dropFirst(4)) }
+        if spec.hasPrefix("key:") { return T("Phím ") + String(spec.dropFirst(4)) }
         return spec
     }
 
@@ -373,7 +373,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func reload() {
         profilePopup.removeAllItems()
-        let def = NSMenuItem(title: "Mặc định (mọi app)", action: nil, keyEquivalent: "")
+        let def = NSMenuItem(title: T("Mặc định (mọi app)"), action: nil, keyEquivalent: "")
         def.representedObject = ""
         def.image = symbol("globe", size: 12)
         profilePopup.menu?.addItem(def)
@@ -412,11 +412,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             return r
         }
         let all = NSMutableAttributedString()
-        all.append(dot(trusted, trusted ? "Đã cấp quyền" : "Thiếu quyền Accessibility"))
+        all.append(dot(trusted, trusted ? T("Đã cấp quyền") : T("Thiếu quyền Accessibility")))
         all.append(NSAttributedString(string: "     "))
-        all.append(dot(controller.isConnected, controller.isConnected ? "Remote đã kết nối" : "Remote chưa kết nối"))
+        all.append(dot(controller.isConnected, controller.isConnected ? T("Remote đã kết nối") : T("Remote chưa kết nối")))
         all.append(NSAttributedString(string: "     "))
-        all.append(dot(touchMode != .off, "Cảm ứng: " + touchMode.title))
+        all.append(dot(touchMode != .off, T("Cảm ứng: ") + touchMode.title))
         statusLabel.attributedStringValue = all
         permButton.isHidden = trusted
     }
@@ -436,7 +436,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func buildButtonsTab() {
-        add(card("Phím trên remote", "av.remote", [makeGrid(columns: [("Bấm", ""), ("Giữ", "+hold"), ("Nhấn đúp", "+double")],
+        add(card(T("Phím trên remote"), "av.remote", [makeGrid(columns: [(T("Bấm"), ""), (T("Giữ"), "+hold"), (T("Nhấn đúp"), "+double")],
                                                             rows: buttonRows)]), to: buttonsHost)
     }
 
@@ -449,9 +449,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private func buildTouchTab() {
         if current == nil {
             let modes: [(String, String, String, String)] = [
-                ("cursor", "Con trỏ", "cursorarrow.motionlines", "Một ngón di chuyển con trỏ, hai ngón cuộn, vuốt nhanh chạy cử chỉ bên dưới."),
-                ("swipe", "Vuốt / chạm", "hand.draw", "Không di chuyển con trỏ; chỉ nhận cử chỉ vuốt và chạm bên dưới."),
-                ("off", "Tắt", "nosign", "Bỏ qua touchpad."),
+                ("cursor", T("Con trỏ"), "cursorarrow.motionlines", T("Một ngón di chuyển con trỏ, hai ngón cuộn, vuốt nhanh chạy cử chỉ bên dưới.")),
+                ("swipe", T("Vuốt / chạm"), "hand.draw", T("Không di chuyển con trỏ; chỉ nhận cử chỉ vuốt và chạm bên dưới.")),
+                ("off", T("Tắt"), "nosign", T("Bỏ qua touchpad.")),
             ]
             let cur = cfg.global["touchmode"] ?? "cursor"
             var modeViews: [NSView] = []
@@ -462,64 +462,69 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 let indent = NSView(); indent.widthAnchor.constraint(equalToConstant: 22).isActive = true
                 modeViews.append(vstack([hstack([b, iconLabel(sym, "")]), hstack([indent, note(desc)])], spacing: 2))
             }
-            modeViews.append(note("Mẹo: giữ nút Siri để đổi nhanh giữa các chế độ."))
-            add(card("Chế độ cảm ứng", "hand.point.up.left", modeViews), to: touchHost)
+            modeViews.append(note(T("Mẹo: giữ nút Siri để đổi nhanh giữa các chế độ.")))
+            add(card(T("Chế độ cảm ứng"), "hand.point.up.left", modeViews), to: touchHost)
 
-            add(card("Độ nhạy", "dial.medium", [
-                sliderRow("Tốc độ con trỏ", "touchspeed", 0.3, 4, 1.5),
-                sliderRow("Tốc độ cuộn", "scrollspeed", 0.2, 3, 1.0),
+            add(card(T("Độ nhạy"), "dial.medium", [
+                sliderRow(T("Tốc độ con trỏ"), "touchspeed", 0.3, 4, 1.5),
+                sliderRow(T("Tốc độ cuộn"), "scrollspeed", 0.2, 3, 1.0),
             ]), to: touchHost)
 
-            add(card("Cảm giác như Magic Trackpad", "wand.and.stars", [
-                checkbox("naturalscroll", "Cuộn tự nhiên (đảo chiều)", "1"),
-                checkbox("scrollmomentum", "Cuộn có quán tính (tiếp tục cuộn sau khi nhấc tay)", "1"),
-                checkbox("tapclick", "Chạm nhẹ để click (chạm rồi đặt ngón xuống = kéo thả)", "0"),
-                checkbox("clicksteady", "Giữ yên con trỏ khi nhấn touchpad để click", "1"),
+            add(card(T("Cảm giác như Magic Trackpad"), "wand.and.stars", [
+                checkbox("naturalscroll", T("Cuộn tự nhiên (đảo chiều)"), "1"),
+                checkbox("scrollmomentum", T("Cuộn có quán tính (tiếp tục cuộn sau khi nhấc tay)"), "1"),
+                checkbox("tapclick", T("Chạm nhẹ để click (chạm rồi đặt ngón xuống = kéo thả)"), "0"),
+                checkbox("clicksteady", T("Giữ yên con trỏ khi nhấn touchpad để click"), "1"),
             ]), to: touchHost)
         }
-        add(card("Cử chỉ", "hand.draw", [makeGrid(columns: [("Hành động", "")], rows: SettingsWindow.gestureRows, popupWidth: 230)]), to: touchHost)
+        add(card(T("Cử chỉ"), "hand.draw", [makeGrid(columns: [(T("Hành động"), "")], rows: SettingsWindow.gestureRows, popupWidth: 230)]), to: touchHost)
     }
 
     private func buildAdvancedTab() {
         guard current == nil else {
-            add(card("Nâng cao", "slider.horizontal.3", [note("Cài đặt nâng cao áp dụng chung cho mọi app. Chọn “Mặc định (mọi app)” ở ô Áp dụng cho để chỉnh.")]), to: advancedHost)
+            add(card(T("Nâng cao"), "slider.horizontal.3", [note(T("Cài đặt nâng cao áp dụng chung cho mọi app. Chọn “Mặc định (mọi app)” ở ô Áp dụng cho để chỉnh."))]), to: advancedHost)
             return
         }
-        let models: [(String, String)] = [("auto", "Tự nhận (khuyên dùng)"), ("gen1", "Đời 1 (A1513 / A1844)"),
-                                          ("gen23", "Đời 2 / 3 (A2540 / A2854, USB-C)")]
-        let detected = detectedProductID == 0 ? "chưa thấy remote" : "product ID 0x" + String(detectedProductID, radix: 16)
-        add(card("Đời remote", "av.remote", [
+        let langs: [(String, String)] = [("auto", T("Tự động (theo hệ thống)")), ("vi", "Tiếng Việt"), ("en", "English")]
+        add(card(T("Ngôn ngữ"), "globe", [
+            idPopup(langs, selected: cfg.global["language"] ?? "auto", action: #selector(languageChanged(_:))),
+            note(T("Đổi ngôn ngữ có hiệu lực sau khi mở lại app.")),
+        ]), to: advancedHost)
+        let models: [(String, String)] = [("auto", T("Tự nhận (khuyên dùng)")), ("gen1", T("Đời 1 (A1513 / A1844)")),
+                                          ("gen23", T("Đời 2 / 3 (A2540 / A2854, USB-C)"))]
+        let detected = detectedProductID == 0 ? T("chưa thấy remote") : "product ID 0x" + String(detectedProductID, radix: 16)
+        add(card(T("Đời remote"), "av.remote", [
             hstack([idPopup(models, selected: cfg.global["remotemodel"] ?? "auto", action: #selector(modelChanged(_:))),
-                    NSTextField(labelWithString: "đang nhận: \(detected)")], spacing: 10),
-            note("Đời 2/3 hiện thêm các nút click ring, Back, TV, Mute, Power ở tab Nút bấm (mã nút theo chuẩn HID, chưa kiểm chứng trên máy thật)."),
+                    NSTextField(labelWithString: TF("đang nhận: %@", detected))], spacing: 10),
+            note(T("Đời 2/3 hiện thêm các nút click ring, Back, TV, Mute, Power ở tab Nút bấm (mã nút theo chuẩn HID, chưa kiểm chứng trên máy thật).")),
         ]), to: advancedHost)
 
-        add(card("Thời gian", "timer", [
-            hstack([NSTextField(labelWithString: "Giữ nút (giây)"), textField("holdtime", "0.8", width: 56),
-                    NSTextField(labelWithString: "      Nhấn đúp (giây)"), textField("doubletime", "0.3", width: 56)], spacing: 8),
+        add(card(T("Thời gian"), "timer", [
+            hstack([NSTextField(labelWithString: T("Giữ nút (giây)")), textField("holdtime", "0.8", width: 56),
+                    NSTextField(labelWithString: T("      Nhấn đúp (giây)")), textField("doubletime", "0.3", width: 56)], spacing: 8),
         ]), to: advancedHost)
 
-        add(card("Mã cảm ứng (family)", "number", [
+        add(card(T("Mã cảm ứng (family)"), "number", [
             textField("touchfamily", "160,145", width: 140),
-            note("Đời 1 = 160, đời 3 = 145 (luôn được thử). Với đời khác: bật “Ghi log nút bấm” (menu → Nâng cao), nối lại remote, xem dòng `family` trong log và thêm vào đây, cách nhau bằng dấu phẩy."),
+            note(T("Đời 1 = 160, đời 3 = 145 (luôn được thử). Với đời khác: bật “Ghi log nút bấm” (menu → Nâng cao), nối lại remote, xem dòng `family` trong log và thêm vào đây, cách nhau bằng dấu phẩy.")),
         ]), to: advancedHost)
 
         var learnViews: [NSView] = [
-            NSButton(title: "Học nút mới…", target: self, action: #selector(learnButton)),
-            note("Dùng khi một nút chưa có trong danh sách: bấm “Học nút mới…”, bấm nút đó trên remote rồi đặt tên. Nút sẽ xuất hiện ở tab Nút bấm."),
+            NSButton(title: T("Học nút mới…"), target: self, action: #selector(learnButton)),
+            note(T("Dùng khi một nút chưa có trong danh sách: bấm “Học nút mới…”, bấm nút đó trên remote rồi đặt tên. Nút sẽ xuất hiện ở tab Nút bấm.")),
         ]
         for name in cfg.custom.keys.sorted() {
-            let del = NSButton(title: "Xóa", target: self, action: #selector(removeCustom(_:)))
+            let del = NSButton(title: T("Xóa"), target: self, action: #selector(removeCustom(_:)))
             del.identifier = NSUserInterfaceItemIdentifier(name)
             learnViews.append(hstack([NSTextField(labelWithString: "\(name)  →  \(cfg.custom[name] ?? "")"), del], spacing: 10))
         }
-        add(card("Nút tự học", "plus.viewfinder", learnViews), to: advancedHost)
+        add(card(T("Nút tự học"), "plus.viewfinder", learnViews), to: advancedHost)
 
-        add(card("Hiệu ứng Back/Forward (nav:back, nav:forward)", "hand.draw", [
-            sliderRow("Thời gian", "navduration", 0.15, 1.0, 0.25),
-            sliderRow("Quãng vuốt", "navdistance", 0.4, 6.0, 0.9),
-            checkbox("navinvert", "Đảo chiều", "0"),
-            note("Nếu thấy giật/lag: giảm Thời gian và Quãng vuốt; nếu không đổi trang: tăng Quãng vuốt."),
+        add(card(T("Hiệu ứng Back/Forward (nav:back, nav:forward)"), "hand.draw", [
+            sliderRow(T("Thời gian"), "navduration", 0.15, 1.0, 0.25),
+            sliderRow(T("Quãng vuốt"), "navdistance", 0.4, 6.0, 0.9),
+            checkbox("navinvert", T("Đảo chiều"), "0"),
+            note(T("Nếu thấy giật/lag: giảm Thời gian và Quãng vuốt; nếu không đổi trang: tăng Quãng vuốt.")),
         ]), to: advancedHost)
     }
 
@@ -539,16 +544,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             if let rep = rep { mi.image = symbol(SettingsWindow.icons[rep], size: 12) }
             p.menu?.addItem(mi)
         }
-        if current != nil { add("↩ Mặc định: " + label(for: cfg.global[key]), "@inherit"); p.menu?.items.last?.image = symbol("arrow.uturn.backward", size: 12) }
-        add("Không làm gì", "none")
+        if current != nil { add(T("↩ Mặc định: ") + label(for: cfg.global[key]), "@inherit"); p.menu?.items.last?.image = symbol("arrow.uturn.backward", size: 12) }
+        add(T("Không làm gì"), "none")
         for (group, items) in SettingsWindow.actionGroups {
             p.menu?.addItem(.separator())
             add(group.uppercased(), nil)
             for (spec, title) in items { add(title, spec) }
         }
         p.menu?.addItem(.separator())
-        add("Mở ứng dụng…", "@app")
-        add("Phím tắt…", "@key")
+        add(T("Mở ứng dụng…"), "@app")
+        add(T("Phím tắt…"), "@key")
 
         let cur: String? = current == nil ? (cfg.global[key] ?? "none") : cfg.apps[current!]?[key]
         if let cur = cur {
@@ -605,11 +610,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func applyTemplate(_ sender: NSMenuItem) {
         guard SettingsWindow.templates.indices.contains(sender.tag) else { return }
         let (name, specs) = SettingsWindow.templates[sender.tag]
-        let target = current.map { appName($0) } ?? "mặc định (mọi app)"
+        let target = current.map { appName($0) } ?? T("mặc định (mọi app)")
         let a = NSAlert()
-        a.messageText = "Áp dụng mẫu “\(name)” cho \(target)?"
-        a.informativeText = "Các nút và cử chỉ có trong mẫu sẽ được thay; những nút khác giữ nguyên."
-        a.addButton(withTitle: "Áp dụng"); a.addButton(withTitle: "Hủy")
+        a.messageText = TF("Áp dụng mẫu “%@” cho %@?", T(name), target)
+        a.informativeText = T("Các nút và cử chỉ có trong mẫu sẽ được thay; những nút khác giữ nguyên.")
+        a.addButton(withTitle: T("Áp dụng")); a.addButton(withTitle: T("Hủy"))
         guard a.runModal() == .alertFirstButtonReturn else { return }
         for (k, v) in specs {
             if let bid = current { cfg.apps[bid, default: [:]][k] = v } else { cfg.global[k] = v }
@@ -621,6 +626,23 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         guard let id = sender.identifier?.rawValue else { return }
         cfg.global["touchmode"] = id
         commit()
+    }
+
+    @objc private func languageChanged(_ sender: NSPopUpButton) {
+        guard let id = sender.selectedItem?.representedObject as? String else { return }
+        cfg.global["language"] = id
+        cfg.save()
+        let a = NSAlert()
+        a.messageText = T("Cần mở lại app để đổi ngôn ngữ")
+        a.addButton(withTitle: T("Mở lại ngay")); a.addButton(withTitle: T("Để sau"))
+        if a.runModal() == .alertFirstButtonReturn {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/sh")
+            p.arguments = ["-c", "sleep 0.6; open -n \"\(Bundle.main.bundlePath)\""]
+            try? p.run()
+            controller.stop()
+            NSApp.terminate(nil)
+        }
     }
 
     @objc private func modelChanged(_ sender: NSPopUpButton) {
@@ -675,7 +697,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             menu.addItem(mi)
         }
         if !running.isEmpty { menu.addItem(.separator()) }
-        let disk = NSMenuItem(title: "Chọn từ thư mục Applications…", action: #selector(addFromDisk), keyEquivalent: "")
+        let disk = NSMenuItem(title: T("Chọn từ thư mục Applications…"), action: #selector(addFromDisk), keyEquivalent: "")
         disk.target = self
         menu.addItem(disk)
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height), in: sender)
@@ -701,8 +723,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func removeApp() {
         guard let bid = current else { return }
         let a = NSAlert()
-        a.messageText = "Xóa cấu hình riêng của \(appName(bid))?"
-        a.addButton(withTitle: "Xóa"); a.addButton(withTitle: "Hủy")
+        a.messageText = TF("Xóa cấu hình riêng của %@?", appName(bid))
+        a.addButton(withTitle: T("Xóa")); a.addButton(withTitle: T("Hủy"))
         guard a.runModal() == .alertFirstButtonReturn else { return }
         cfg.apps[bid] = nil
         current = nil
@@ -722,18 +744,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func promptKey() -> String? {
         let a = NSAlert()
-        a.messageText = "Nhập phím tắt"
-        a.informativeText = "Ví dụ: cmd+w, cmd+shift+4, ctrl+right, space. Phím bổ trợ: cmd, ctrl, alt, shift."
+        a.messageText = T("Nhập phím tắt")
+        a.informativeText = T("Ví dụ: cmd+w, cmd+shift+4, ctrl+right, space. Phím bổ trợ: cmd, ctrl, alt, shift.")
         let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
         a.accessoryView = f
-        a.addButton(withTitle: "OK"); a.addButton(withTitle: "Hủy")
+        a.addButton(withTitle: "OK"); a.addButton(withTitle: T("Hủy"))
         a.window.initialFirstResponder = f
         guard a.runModal() == .alertFirstButtonReturn else { return nil }
         let text = f.stringValue.trimmingCharacters(in: .whitespaces).lowercased()
         guard !text.isEmpty else { return nil }
         guard Action.parse("key:" + text) != nil else {
             let e = NSAlert()
-            e.messageText = "Phím không hợp lệ: \(text)"
+            e.messageText = TF("Phím không hợp lệ: %@", text)
             e.runModal()
             return nil
         }
@@ -744,9 +766,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     @objc private func learnButton() {
         let a = NSAlert()
-        a.messageText = "Bấm một nút trên remote…"
-        a.informativeText = "Nút đầu tiên bạn bấm sẽ được ghi nhận (không chạy hành động)."
-        a.addButton(withTitle: "Hủy")
+        a.messageText = T("Bấm một nút trên remote…")
+        a.informativeText = T("Nút đầu tiên bạn bấm sẽ được ghi nhận (không chạy hành động).")
+        a.addButton(withTitle: T("Hủy"))
         controller.learnHandler = { [weak self] key in
             guard let self = self else { return }
             self.window.endSheet(a.window)
@@ -758,24 +780,24 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private func finishLearn(_ key: String) {
         if let existing = buttonNames.first(where: { $0.value == key })?.key {
             let e = NSAlert()
-            e.messageText = "Nút này đã có tên: \(existing)"
-            e.informativeText = "Mã nút: \(key)"
+            e.messageText = TF("Nút này đã có tên: %@", existing)
+            e.informativeText = TF("Mã nút: %@", key)
             e.runModal()
             return
         }
         let a = NSAlert()
-        a.messageText = "Đặt tên cho nút (mã \(key))"
-        a.informativeText = "Chữ thường, không dấu, không khoảng trắng. Ví dụ: ring_up"
+        a.messageText = TF("Đặt tên cho nút (mã %@)", key)
+        a.informativeText = T("Chữ thường, không dấu, không khoảng trắng. Ví dụ: ring_up")
         let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         a.accessoryView = f
-        a.addButton(withTitle: "Lưu"); a.addButton(withTitle: "Hủy")
+        a.addButton(withTitle: T("Lưu")); a.addButton(withTitle: T("Hủy"))
         a.window.initialFirstResponder = f
         guard a.runModal() == .alertFirstButtonReturn else { return }
         let name = f.stringValue.lowercased().trimmingCharacters(in: .whitespaces)
         let ok = !name.isEmpty && !name.contains(where: { " +:".contains($0) }) && buttonNames[name] == nil
         guard ok else {
             let e = NSAlert()
-            e.messageText = "Tên không hợp lệ hoặc đã tồn tại: \(name)"
+            e.messageText = TF("Tên không hợp lệ hoặc đã tồn tại: %@", name)
             e.runModal()
             return
         }
