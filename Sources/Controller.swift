@@ -176,6 +176,7 @@ final class Controller {
             CGWarpMouseCursorPosition(anchor)
             pos = anchor
         }
+        if debugLog { log("MOUSE \(down ? "down" : "up") tại (\(Int(pos.x)),\(Int(pos.y))) app=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")") }
         postMouse(down ? .leftMouseDown : .leftMouseUp, at: pos)
     }
 
