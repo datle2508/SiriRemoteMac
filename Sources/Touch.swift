@@ -4,6 +4,8 @@
 import Cocoa
 
 var navInvert = false
+var navDuration = 0.3        // giây
+var navDistance = 0.9        // tỉ lệ chiều rộng cửa sổ
 
 /// Khung của cửa sổ phía trước (của app đang ở trên cùng), theo tọa độ màn hình của CGEvent.
 func frontWindowFrame() -> CGRect? {
@@ -29,9 +31,10 @@ func navSwipe(back: Bool) {
         let cur = CGEvent(source: nil)?.location ?? .zero
         if !r.contains(cur) { CGWarpMouseCursorPosition(CGPoint(x: r.midX, y: r.midY)) }
     }
-    // Quãng vuốt đủ dài (hơn chiều rộng màn hình) để vượt ngưỡng xác nhận của trình duyệt
-    let total = max(CGDisplayBounds(CGMainDisplayID()).width * 1.15, 1400)
-    let duration = 0.45
+    // Quãng vuốt tính theo chiều rộng cửa sổ (trình duyệt xác nhận khi vượt khoảng 40% chiều rộng)
+    let width = frontWindowFrame()?.width ?? CGDisplayBounds(CGMainDisplayID()).width
+    let total = max(width * navDistance, 600)
+    let duration = navDuration
 
     func post(_ delta: Int32, _ phase: Int64) {
         guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
@@ -41,13 +44,13 @@ func navSwipe(back: Bool) {
         e.post(tap: .cghidEventTap)
     }
 
-    // Dựa theo thời gian thực (không theo số nhịp) để chuyển động mượt dù nhịp timer lệch; ~125 sự kiện/giây
+    // Dựa theo thời gian thực (không theo số nhịp) để chuyển động mượt dù nhịp timer lệch; 60 sự kiện/giây (bằng tần số quét màn hình, tránh dồn hàng đợi sự kiện)
     navTimer?.cancel()
     let start = ProcessInfo.processInfo.systemUptime
     var sent: Int32 = 0
     var started = false
     let timer = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive))
-    timer.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .microseconds(500))
+    timer.schedule(deadline: .now(), repeating: .microseconds(16667), leeway: .microseconds(500))
     timer.setEventHandler {
         let t = min((ProcessInfo.processInfo.systemUptime - start) / duration, 1.0)
         let eased = 0.5 - 0.5 * cos(Double.pi * t)                 // tăng tốc rồi giảm tốc như ngón tay thật

@@ -49,6 +49,8 @@ let defaultMap: [String: String] = [
     "touchmode": "cursor",          // cảm ứng: cursor (con trỏ + cuộn + vuốt), swipe (chỉ vuốt/chạm), off
     "touchspeed": "1.5",            // tốc độ con trỏ (0.3 – 5)
     "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
+    "navduration": "0.3",           // thời gian cú vuốt Back/Forward (giây, 0.15 – 1.0)
+    "navdistance": "0.9",           // quãng vuốt = tỉ lệ chiều rộng cửa sổ (0.4 – 2.0)
     "navinvert": "0",               // 1 = đảo chiều hiệu ứng Back/Forward (nav:back / nav:forward)
     "naturalscroll": "1",           // 1 = cuộn tự nhiên (đảo chiều), 0 = ngược lại
     "tapclick": "0",                // 1 = chạm nhẹ để click
@@ -131,7 +133,7 @@ var appDisabled: [String: Set<String>] = [:]     // nút bị tắt ("none") ri�
 /// Các khóa là tùy chọn (không phải nút bấm / cử chỉ).
 let settingKeys: Set<String> = ["holdtime", "doubletime", "remotemodel", "navinvert", "touchmode",
                                 "touchspeed", "scrollspeed", "naturalscroll", "tapclick", "touchfamily",
-                                "scrollmomentum", "clicksteady"]
+                                "scrollmomentum", "clicksteady", "navduration", "navdistance"]
 
 /// Đọc file cấu hình (qua ConfigFile) → bản đồ nút → hành động; cập nhật các tùy chọn toàn cục.
 func loadMap() -> [String: Action] {
@@ -149,6 +151,8 @@ func loadMap() -> [String: Action] {
     if let t = number("holdtime", 0.2...3.0) { holdDelaySeconds = t }
     if let t = number("touchspeed", 0.3...5.0) { touchSpeed = t }
     if let t = number("scrollspeed", 0.2...4.0) { scrollSpeed = t }
+    if let t = number("navduration", 0.15...1.0) { navDuration = t }
+    if let t = number("navdistance", 0.4...2.0) { navDistance = t }
     if let v = take("touchmode") { touchMode = TouchMode(rawValue: v.lowercased()) ?? .cursor }
     if let v = take("navinvert") { navInvert = flag(v) }
     if let v = take("naturalscroll") { naturalScroll = !(v == "0" || v.lowercased() == "false") }
