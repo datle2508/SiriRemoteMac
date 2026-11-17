@@ -34,7 +34,7 @@ Menu 🎛 → **Khởi động cùng macOS** (chỉ khi chạy từ `.app`).
 
 - **Giữ nút Siri** (mặc định) để đổi nhanh giữa chế độ *Con trỏ* và *Vuốt/chạm*; có tiếng báo và tên chế độ hiện cạnh biểu tượng thanh menu. Hành động `toggletouch` gán được cho nút/cử chỉ khác.
 - Ở chế độ Con trỏ, nếu bạn đã gán hành động cho một hướng vuốt, con trỏ **đứng yên** khi bạn vuốt nhanh theo hướng đó. Di chuyển chậm, chéo, hoặc theo hướng chưa gán thì con trỏ chạy bình thường.
-- **Safari** có sẵn cấu hình riêng (thêm một lần, sửa/xóa tùy ý): Menu = Back (`cmd+[`), Home = Forward (`cmd+]`). Hành động thử nghiệm `nav:back` / `nav:forward` giả lập cú vuốt hai ngón để có hiệu ứng trượt trang, nhưng chưa chạy ổn trên Safari nên không dùng mặc định.
+- **Safari** có sẵn cấu hình riêng (thêm một lần, sửa/xóa tùy ý): Menu = Back (`cmd+[`), Home = Forward (`cmd+]`). Hành động thử nghiệm `nav:back` / `nav:forward` giả lập cú vuốt hai ngón để có hiệu ứng trượt trang (chọn *Back/Forward (thử nghiệm…)* trong cài đặt). Cần bật *Vuốt giữa các trang* trong System Settings → Trackpad → More Gestures, trang phải đang ở mép trái khi Back; app tự đưa con trỏ vào cửa sổ Safari nếu nó đang ở chỗ khác.
 
 App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cách mà HyperVibe, Remote Buddy… dùng). Không cần quyền thêm ngoài Accessibility.
 

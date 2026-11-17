@@ -5,10 +5,36 @@ import Cocoa
 
 var navInvert = false
 
-/// Giả lập cú vuốt hai ngón ngang của trackpad (chuỗi sự kiện cuộn có pha) để Safari/Chrome chạy
-/// hiệu ứng Back/Forward như Magic Trackpad. Hướng: ngón tay sang phải = Back.
+/// Khung của cửa sổ phía trước (của app đang ở trên cùng), theo tọa độ màn hình của CGEvent.
+func frontWindowFrame() -> CGRect? {
+    guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+          let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+    else { return nil }
+    for w in list {
+        guard (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid,
+              (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+              let b = w[kCGWindowBounds as String] as? NSDictionary,
+              let r = CGRect(dictionaryRepresentation: b as CFDictionary), r.width > 100, r.height > 100 else { continue }
+        return r
+    }
+    return nil
+}
+
+/// Giả lập cú vuốt hai ngón ngang của trackpad (chuỗi sự kiện cuộn có pha: 1 = bắt đầu, 2 = đang vuốt, 4 = kết thúc)
+/// để Safari/Chrome chạy hiệu ứng Back/Forward. Hướng: ngón tay sang phải = Back.
+/// Sự kiện cuộn đi tới cửa sổ dưới con trỏ, nên nếu con trỏ đang ở ngoài cửa sổ phía trước thì đưa nó vào giữa cửa sổ.
 func navSwipe(back: Bool) {
     let dir: Double = (back ? 1 : -1) * (navInvert ? -1 : 1)
+    if let r = frontWindowFrame() {
+        let cur = CGEvent(source: nil)?.location ?? .zero
+        if !r.contains(cur) { CGWarpMouseCursorPosition(CGPoint(x: r.midX, y: r.midY)) }
+    }
+    // Quãng vuốt đủ dài (hơn chiều rộng màn hình) để vượt ngưỡng xác nhận của trình duyệt
+    let total = max(CGDisplayBounds(CGMainDisplayID()).width * 1.15, 1400)
+    let frames = 26
+    let weights = (1...frames).map { 1.0 - Double($0) / Double(frames + 1) * 0.8 }     // nhanh rồi chậm dần
+    let sum = weights.reduce(0, +)
+
     func post(_ delta: Int32, _ phase: Int64) {
         guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
                               wheel1: 0, wheel2: delta, wheel3: 0) else { return }
@@ -16,15 +42,12 @@ func navSwipe(back: Bool) {
         if let f = CGEventField(rawValue: 99) { e.setIntegerValueField(f, value: phase) }   // scrollPhase
         e.post(tap: .cghidEventTap)
     }
-    post(0, 1)                                    // began
     var i = 0
-    let frames = 18
-    Timer.scheduledTimer(withTimeInterval: 0.012, repeats: true) { t in
+    Timer.scheduledTimer(withTimeInterval: 0.011, repeats: true) { t in
         i += 1
-        let progress = Double(i) / Double(frames)
-        let delta = Int32((dir * 45 * (1.2 - progress)).rounded())     // chậm dần như ngón tay thật
-        post(delta, 2)                            // changed
-        if i >= frames { t.invalidate(); post(0, 4) }                  // ended
+        let delta = Int32((dir * total * weights[i - 1] / sum).rounded())
+        post(delta, i == 1 ? 1 : 2)                       // sự kiện đầu mang luôn quãng vuốt đầu tiên
+        if i >= frames { t.invalidate(); post(0, 4) }     // nhấc tay
     }
 }
 
