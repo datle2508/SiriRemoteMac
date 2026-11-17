@@ -31,55 +31,61 @@ func navSwipe(back: Bool) {
         let cur = CGEvent(source: nil)?.location ?? .zero
         if !r.contains(cur) { CGWarpMouseCursorPosition(CGPoint(x: r.midX, y: r.midY)) }
     }
-    // Quãng vuốt tính theo chiều rộng cửa sổ (trình duyệt xác nhận khi vượt khoảng 40% chiều rộng)
     let width = frontWindowFrame()?.width ?? CGDisplayBounds(CGMainDisplayID()).width
-    let total = max(width * navDistance, 600)
-    let duration = navDuration
+    let total = max(width * navDistance, 600)          // tổng quãng (gồm cả quán tính)
 
-    func post(_ delta: Int32, _ phase: Int64, _ momentum: Int64 = 0) {
+    // Dựng sẵn toàn bộ chuỗi sự kiện giống trackpad thật (đã đo bằng ScrollSniffer):
+    // mayBegin(128) → began(1) → changed(2) tăng dần mượt → ended(4) → momentum(1,2,2,…) giảm dần → momentum end(3), 60 sự kiện/giây.
+    struct Frame { var delta: Double; var phase: Int64; var momentum: Int64 }
+    var frames: [Frame] = [Frame(delta: 0, phase: 128, momentum: 0)]
+    let n = max(Int((navDuration * 60).rounded()), 6)           // số khung của giai đoạn vuốt
+    let decay = 0.93                                             // quán tính: mỗi khung còn 93%
+    // peak sao cho: tổng vuốt (ramp ~ nửa đỉnh) + tổng quán tính (peak/(1-decay)) = total
+    let peak = total / (Double(n) * 0.5 + 1.0 / (1 - decay))
+    for k in 1...n {
+        let t = Double(k) / Double(n)
+        let v = peak * (t * t * (3 - 2 * t) * 0.85 + 0.15 * t)   // tăng mượt, đạt đỉnh lúc nhấc tay
+        frames.append(Frame(delta: v, phase: k == 1 ? 1 : 2, momentum: 0))
+    }
+    frames.append(Frame(delta: 0, phase: 4, momentum: 0))
+    var v = peak * decay
+    var first = true
+    while v >= 1 {
+        frames.append(Frame(delta: v, phase: 0, momentum: first ? 1 : 2))
+        first = false
+        v *= decay
+    }
+    frames.append(Frame(delta: 0, phase: 0, momentum: 3))
+
+    var carry = 0.0
+    func post(_ f: Frame) {
+        carry += f.delta * dir
+        let d = Int32(carry.rounded())
+        carry -= Double(d)
         guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
-                              wheel1: 0, wheel2: delta, wheel3: 0) else { return }
-        if let f = CGEventField(rawValue: 88) { e.setIntegerValueField(f, value: 1) }          // isContinuous
-        if let f = CGEventField(rawValue: 99) { e.setIntegerValueField(f, value: phase) }      // scrollPhase
-        if let f = CGEventField(rawValue: 123) { e.setIntegerValueField(f, value: momentum) }  // momentumPhase
+                              wheel1: 0, wheel2: d, wheel3: 0) else { return }
+        func setI(_ id: UInt32, _ val: Int64) { if let fld = CGEventField(rawValue: id) { e.setIntegerValueField(fld, value: val) } }
+        func setD(_ id: UInt32, _ val: Double) { if let fld = CGEventField(rawValue: id) { e.setDoubleValueField(fld, value: val) } }
+        setI(88, 1)                                    // isContinuous
+        if f.momentum == 0 { setI(99, f.phase) }       // scrollPhase (trackpad thật không đặt khi đang quán tính)
+        else { setI(123, f.momentum); setI(173, f.momentum) }
+        if f.phase != 0 || f.momentum != 0 { setI(100, 1) }   // scrollCount
+        setI(137, 1)
+        if d != 0 { setD(175, -Double(d) / 10.0); setD(177, -Double(d) * 0.75) }
         e.post(tap: .cghidEventTap)
     }
 
-    // Theo thời gian thực (không theo số nhịp) và 60 sự kiện/giây (bằng tần số quét màn hình, tránh dồn hàng đợi).
-    // Cú vuốt tăng tốc dần và kết thúc khi còn đang nhanh (như một cú "hất" tay), rồi có vài sự kiện quán tính giảm dần:
-    // trình duyệt dựa vào vận tốc lúc nhấc tay để quyết định chuyển trang.
     navTimer?.cancel()
     let start = ProcessInfo.processInfo.systemUptime
-    var sent: Int32 = 0
-    var started = false
-    var lastDelta: Int32 = 0
-    var momentumStep = 0
+    var idx = 0
     let timer = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive))
-    timer.schedule(deadline: .now(), repeating: .microseconds(16667), leeway: .microseconds(500))
+    timer.schedule(deadline: .now(), repeating: .microseconds(16667), leeway: .microseconds(300))
     timer.setEventHandler {
-        if momentumStep == 0 {
-            let t = min((ProcessInfo.processInfo.systemUptime - start) / duration, 1.0)
-            let eased = t * t                                       // tăng tốc dần, nhanh nhất lúc nhấc tay
-            let target = Int32((dir * total * eased).rounded())
-            let delta = target - sent
-            if delta != 0 {
-                post(delta, started ? 2 : 1)                        // sự kiện đầu mang luôn quãng vuốt đầu tiên
-                started = true
-                sent = target
-                lastDelta = delta
-            }
-            if t >= 1.0 {
-                if started { post(0, 4) }                           // nhấc tay
-                momentumStep = 1
-            }
-        } else {
-            let k = momentumStep
-            if !started || k > 6 { timer.cancel(); return }
-            if k == 6 { post(0, 0, 3); timer.cancel(); return }     // kết thúc quán tính
-            let d = Int32((Double(lastDelta) * pow(0.78, Double(k))).rounded())
-            post(d, 0, k == 1 ? 1 : 2)                              // quán tính: bắt đầu / tiếp tục
-            momentumStep += 1
-        }
+        // mỗi nhịp gửi đúng 1 khung (không dồn); nếu trễ quá 2 khung thì gộp delta để không mất quãng
+        guard idx < frames.count else { timer.cancel(); return }
+        post(frames[idx])
+        idx += 1
+        if idx >= frames.count { timer.cancel() }
     }
     navTimer = timer
     timer.resume()
