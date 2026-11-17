@@ -182,7 +182,7 @@ enum TouchMode: String { case off, cursor, swipe }
 
 /// Cấu hình riêng mặc định cho một số app (chỉ thêm một lần, sau đó bạn tự do sửa/xóa).
 let seedApps: [String: [String: String]] = [
-    "com.apple.Safari": ["menu": "nav:back", "home": "nav:forward"],     // Menu = Back, Home = Forward (có hiệu ứng vuốt)
+    "com.apple.Safari": ["menu": "key:cmd+[", "home": "key:cmd+]"],     // Menu = Back, Home = Forward
 ]
 
 func migrateConfig() {
@@ -193,14 +193,14 @@ func migrateConfig() {
         c.seeded.append(bid)
         changed = true
     }
-    // Nâng cấp một lần: bản cũ dùng phím cmd+[ / cmd+] (không có hiệu ứng vuốt)
-    let upgrade = "com.apple.Safari:nav"
-    if !c.seeded.contains(upgrade) {
-        if c.apps["com.apple.Safari"]?["menu"] == "key:cmd+[" && c.apps["com.apple.Safari"]?["home"] == "key:cmd+]" {
-            c.apps["com.apple.Safari"]?["menu"] = "nav:back"
-            c.apps["com.apple.Safari"]?["home"] = "nav:forward"
+    // Một lần: hiệu ứng vuốt (nav:back/forward) chưa chạy ổn trên Safari → trả về phím cmd+[ / cmd+]
+    let revert = "com.apple.Safari:keys"
+    if !c.seeded.contains(revert) {
+        if c.apps["com.apple.Safari"]?["menu"] == "nav:back" && c.apps["com.apple.Safari"]?["home"] == "nav:forward" {
+            c.apps["com.apple.Safari"]?["menu"] = "key:cmd+["
+            c.apps["com.apple.Safari"]?["home"] = "key:cmd+]"
         }
-        c.seeded.append(upgrade)
+        c.seeded.append(revert)
         changed = true
     }
     if changed || !FileManager.default.fileExists(atPath: configPath) { c.save() }
@@ -475,11 +475,12 @@ final class TouchEngine {
         let ddx = c.x - startCentroid.x, ddy = c.y - startCentroid.y
         let adx = abs(ddx), ady = abs(ddy)
         let far = max(adx, ady)
-        var decide = mouseButtonDown || ts - startTime >= 0.3
-        if !decide, far >= 0.04 {
+        var decide = mouseButtonDown || ts - startTime >= 0.45      // quá lâu: chắc chắn không phải cú vuốt
+        if !decide {
+            let dominant = far >= 2 * min(adx, ady)
             let key = adx > ady ? (ddx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (ddy > 0 ? "SWIPEUP" : "SWIPEDOWN")
-            if far >= 2 * min(adx, ady), controller.action(for: key) != nil { return }   // giống cú vuốt: giữ yên
-            decide = true
+            if far >= 0.06, dominant, controller.action(for: key) == nil { decide = true }   // hướng chưa gán cử chỉ
+            else if far >= 0.12, !dominant { decide = true }                                  // đi chéo rõ ràng
         }
         guard decide else { return }
         cursorDecided = true
@@ -876,7 +877,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ("click", "Click chuột"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống"),
         ("key:left", "Phím ←"), ("key:right", "Phím →"), ("key:up", "Phím ↑"), ("key:down", "Phím ↓"),
         ("key:space", "Phím Space"), ("key:return", "Phím Enter"), ("key:escape", "Phím Esc"),
-        ("nav:back", "Back (hiệu ứng vuốt)"), ("nav:forward", "Forward (hiệu ứng vuốt)"),
+        ("nav:back", "Back (thử nghiệm: hiệu ứng vuốt)"), ("nav:forward", "Forward (thử nghiệm: hiệu ứng vuốt)"),
         ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
         ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
         ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
@@ -1385,6 +1386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let debugItem = NSMenuItem()
     private let loginItem = NSMenuItem()
     private let touchItem = NSMenuItem()
+    private let modeItem = NSMenuItem()
 
     private func entry(_ title: String, _ sel: Selector, key: String = "") -> NSMenuItem {
         let m = NSMenuItem(title: title, action: sel, keyEquivalent: key)
@@ -1401,12 +1403,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         debugItem.title = "Ghi log nút bấm (dò mã nút)"; debugItem.action = #selector(toggleDebug)
         seizeItem.target = self; debugItem.target = self
         loginItem.title = "Khởi động cùng macOS"; loginItem.action = #selector(toggleLogin); loginItem.target = self
+        modeItem.title = "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)"; modeItem.action = #selector(switchMode); modeItem.target = self
         touchItem.title = "Bật cảm ứng touchpad"; touchItem.action = #selector(toggleTouch); touchItem.target = self
 
         let menu = NSMenu()
         for m in [statusLine, .separator(),
                   entry("Cài đặt nút…", #selector(openSettings), key: ","), .separator(),
-                  touchItem, loginItem, seizeItem, debugItem, .separator(),
+                  touchItem, modeItem, loginItem, seizeItem, debugItem, .separator(),
                   entry("Mở file cấu hình nút", #selector(openConfig)),
                   entry("Nạp lại cấu hình", #selector(reload)),
                   entry("Mở file log", #selector(openLog)), .separator(),
@@ -1480,11 +1483,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         seizeItem.state = controller.seize ? .on : .off
         debugItem.state = debugLog ? .on : .off
         touchItem.state = touchMode != .off ? .on : .off
+        modeItem.title = "Chế độ cảm ứng: " + (touchMode == .cursor ? "Con trỏ" : touchMode == .swipe ? "Vuốt/chạm" : "Tắt") + " (bấm để đổi)"
         let inApp = Bundle.main.bundlePath.hasSuffix(".app")
         loginItem.isEnabled = inApp      // chỉ bật được khi chạy từ SiriRemoteMac.app
         loginItem.state = (inApp && SMAppService.mainApp.status == .enabled) ? .on : .off
     }
 
+    @objc private func switchMode() { toggleTouchMode() }
     @objc private func toggleTouch() {
         var c = ConfigFile.load()
         c.global["touchmode"] = touchMode == .off ? "cursor" : "off"
