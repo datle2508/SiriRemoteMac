@@ -354,6 +354,7 @@ final class TouchEngine {
     }
 
     // Vị trí con trỏ: dùng lại vị trí vừa gửi nếu còn mới (tránh hỏi hệ thống ở từng khung hình)
+    func notePosition(_ p: CGPoint) { lastPos = p; lastPosTime = ProcessInfo.processInfo.systemUptime }
     private var lastPos = CGPoint.zero
     private var lastPosTime = 0.0
     private func currentPos() -> CGPoint {

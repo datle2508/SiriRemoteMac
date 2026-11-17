@@ -186,6 +186,7 @@ final class Controller {
         var pos = CGEvent(source: nil)?.location ?? .zero
         if down, let anchor = touchEngine.beginPress() {     // lấy lại vị trí trước khi ngón tay lăn đi lúc nhấn
             CGWarpMouseCursorPosition(anchor)
+            touchEngine.notePosition(anchor)
             pos = anchor
         }
         if debugLog { log("MOUSE \(down ? "down" : "up") tại (\(Int(pos.x)),\(Int(pos.y))) app=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")") }
