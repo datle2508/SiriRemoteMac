@@ -32,7 +32,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
                   ("nav:back", T("Back (thử nghiệm: hiệu ứng vuốt)")), ("nav:forward", T("Forward (thử nghiệm: hiệu ứng vuốt)"))]),
         (T("Chuột"), [("click", T("Click chuột")), ("rightclick", T("Click phải")), ("scroll:up", T("Cuộn lên")), ("scroll:down", T("Cuộn xuống"))]),
-        (T("Zoom"), [("smartzoom", T("Zoom thông minh (như Magic Trackpad)")), ("zoomin", T("Phóng to (⌘+)")),
+        (T("Zoom"), [("zoomtoggle", T("Zoom nhanh (phóng to ↔ về cũ)")), ("smartzoom", T("Zoom thông minh (thử nghiệm)")), ("zoomin", T("Phóng to (⌘+)")),
                       ("zoomout", T("Thu nhỏ (⌘−)")), ("zoomreset", T("Kích thước thật (⌘0)"))]),
         (T("Hệ thống"), [("mission", "Mission Control"), ("expose", T("Exposé (cửa sổ của app)")), ("screensaver", T("Màn hình chờ")),
                       ("showdesktop", T("Hiện màn hình nền")), ("lockscreen", T("Khóa màn hình")), ("sleep", T("Cho Mac ngủ")), ("displaysleep", T("Tắt màn hình")),
@@ -58,7 +58,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         "right": "arrow.right.circle", "back": "chevron.backward", "tv": "tv", "mute": "speaker.slash.fill", "power": "power",
         "swipeleft": "arrow.left", "swiperight": "arrow.right", "swipeup": "arrow.up", "swipedown": "arrow.down",
         "twofingertap": "hand.tap", "twofingerdoubletap": "hand.tap.fill",
-        "smartzoom": "plus.magnifyingglass", "zoomin": "plus.magnifyingglass", "zoomout": "minus.magnifyingglass", "zoomreset": "1.magnifyingglass",
+        "smartzoom": "plus.magnifyingglass", "zoomtoggle": "plus.magnifyingglass", "zoomin": "plus.magnifyingglass", "zoomout": "minus.magnifyingglass", "zoomreset": "1.magnifyingglass",
     ]
     private static let allPresets: [(String, String)] = SettingsWindow.actionGroups.flatMap { $0.1 }
 
@@ -73,7 +73,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         (T("Lướt TikTok"), ["touchpad": "key:space", "swipeup": "key:down", "swipedown": "key:up",
                          "home": "key:m", "menu": "key:escape"]),
         (T("Duyệt web"), ["menu": "key:cmd+[", "home": "key:cmd+]", "swipeup": "scroll:down", "swipedown": "scroll:up",
-                      "twofingerdoubletap": "smartzoom"]),
+                      "twofingerdoubletap": "zoomtoggle"]),
         (T("Thuyết trình"), ["touchpad": "key:right", "menu": "key:left", "home": "key:escape",
                           "swipeleft": "key:right", "swiperight": "key:left"]),
     ]

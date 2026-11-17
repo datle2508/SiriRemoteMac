@@ -14,6 +14,7 @@ enum Action {
     case command(String, [String])
     case nav(Bool)                  // true = Back, false = Forward (hiệu ứng vuốt như Magic Trackpad)
     case rightClick                 // click chuột phải
+    case zoomToggle                 // phóng to vài mức ↔ về kích thước thật (⌘= ×3 / ⌘0)
     case smartZoom                  // zoom thông minh như chạm đúp hai ngón trên Magic Trackpad
     case dock(String)               // thông báo gửi cho Dock (Mission Control, Exposé, Show Desktop)
     case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
@@ -44,6 +45,7 @@ enum Action {
         if spec == "displaysleep" { return .command("/usr/bin/pmset", ["displaysleepnow"]) }
         if spec == "mission" { return .dock("com.apple.expose.awake") }
         if spec == "expose" { return .dock("com.apple.expose.front.awake") }   // Exposé: cửa sổ của app
+        if spec == "zoomtoggle" { return .zoomToggle }
         if spec == "smartzoom" { return .smartZoom }
         if spec == "zoomin" { return .key(24, .maskCommand) }      // ⌘=
         if spec == "zoomout" { return .key(27, .maskCommand) }     // ⌘-
@@ -75,6 +77,8 @@ enum Action {
         }
     }
 
+    private static var zoomed = false
+
     func run() {
         if debugLog { log("RUN \(self) accessibility=\(AXIsProcessTrusted())") }
         switch self {
@@ -102,6 +106,10 @@ enum Action {
             let pos = CGEvent(source: nil)?.location ?? .zero
             postMouse(.rightMouseDown, at: pos, button: .right)
             postMouse(.rightMouseUp, at: pos, button: .right)
+        case .zoomToggle:
+            Action.zoomed.toggle()
+            let (code, n) = Action.zoomed ? (CGKeyCode(24), 3) : (CGKeyCode(29), 1)
+            for _ in 0..<n { Action.key(code, .maskCommand).run() }
         case .smartZoom:
             postSmartMagnify()
         case .dock(let name):

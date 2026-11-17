@@ -55,7 +55,8 @@ private let englishStrings: [String: String] = [
     "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)": "Switch touch mode (cursor ↔ swipe)",
     // Mẫu
     "Chạm đúp 2 ngón": "Two-finger double tap", "Zoom": "Zoom",
-    "Zoom thông minh (như Magic Trackpad)": "Smart zoom (like Magic Trackpad)",
+    "Zoom thông minh (thử nghiệm)": "Smart zoom (experimental)",
+    "Zoom nhanh (phóng to ↔ về cũ)": "Quick zoom (zoom in ↔ reset)",
     "Phóng to (⌘+)": "Zoom in (⌘+)", "Thu nhỏ (⌘−)": "Zoom out (⌘−)", "Kích thước thật (⌘0)": "Actual size (⌘0)",
     "Mẫu có sẵn": "Templates", "Nghe nhạc": "Listen to music", "Xem YouTube": "Watch YouTube",
     "Lướt TikTok": "Browse TikTok", "Duyệt web": "Web browsing", "Thuyết trình": "Presentation",
