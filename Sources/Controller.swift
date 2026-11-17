@@ -23,6 +23,12 @@ final class Controller {
     func start() {
         stop()
         map = loadMap()
+        if frontObserver == nil {
+            frontObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
+                self?.frontBID = (n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+            }
+        }
         let m = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         // Chỉ giao diện nút bấm (Consumer Control) của thiết bị Apple; lọc tiếp theo tên "remote".
         let match: [String: Any] = [kIOHIDVendorIDKey as String: 0x004C,
@@ -53,7 +59,13 @@ final class Controller {
     func reloadMap() { map = loadMap(); touchEngine.start(force: false) }
 
     /// Hành động của nút: ưu tiên cấu hình riêng của app đang ở trên cùng, nếu không có thì dùng cấu hình mặc định.
-    func action(for key: String, bundleID: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier) -> Action? {
+    /// Bundle id của app đang ở trên cùng, cập nhật bằng thông báo (không phải hỏi hệ thống ở mỗi lần bấm).
+    private var frontBID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    private var frontObserver: NSObjectProtocol?
+
+    func action(for key: String) -> Action? { action(for: key, bundleID: frontBID) }
+
+    func action(for key: String, bundleID: String?) -> Action? {
         if let bid = bundleID {
             if appDisabled[bid]?.contains(key) == true { return nil }
             if let a = appOverrides[bid]?[key] { return a }
@@ -102,7 +114,7 @@ final class Controller {
             return
         }
         if debugLog { log("BUTTON \(key) (\(buttonNames.first { $0.value == key }?.key ?? "?")) \(down ? "down" : "up")") }
-        let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let bid = frontBID
         let tap = action(for: key, bundleID: bid)
         let hold = action(for: key + "+HOLD", bundleID: bid)
         let dbl = action(for: key + "+DOUBLE", bundleID: bid)

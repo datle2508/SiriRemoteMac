@@ -91,6 +91,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let advancedHost = NSStackView()
     private var pages: [NSScrollView] = []
     private var statusTimer: Timer?
+    var onClose: (() -> Void)?
     private let segment = NSSegmentedControl()
 
     /// "gen1" hoặc "gen23": theo lựa chọn trong tab Nâng cao, hoặc tự nhận từ product ID khi để "auto".
@@ -213,6 +214,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         statusTimer?.invalidate()
         statusTimer = nil
+        onClose?()                      // AppDelegate giải phóng cửa sổ để không giữ RAM khi không dùng
+    }
+
+    deinit {
+        window.delegate = nil
+        statusTimer?.invalidate()
     }
 
     @objc private func pageChanged(_ sender: NSSegmentedControl) { showPage(sender.selectedSegment) }

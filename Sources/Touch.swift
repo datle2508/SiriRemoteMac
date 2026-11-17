@@ -353,7 +353,14 @@ final class TouchEngine {
         }
     }
 
-    private func currentPos() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
+    // Vị trí con trỏ: dùng lại vị trí vừa gửi nếu còn mới (tránh hỏi hệ thống ở từng khung hình)
+    private var lastPos = CGPoint.zero
+    private var lastPosTime = 0.0
+    private func currentPos() -> CGPoint {
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastPosTime < 0.05 { return lastPos }
+        return CGEvent(source: nil)?.location ?? .zero
+    }
 
     private func click() {
         let pos = currentPos()
@@ -411,6 +418,7 @@ final class TouchEngine {
             e.post(tap: .cghidEventTap)
         }
         let now = ProcessInfo.processInfo.systemUptime
+        lastPos = pos; lastPosTime = now
         cursorHistory.append((now, pos))
         cursorHistory.removeAll { now - $0.t > 0.5 }
     }

@@ -158,7 +158,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refresh()
     }
     @objc private func openSettings() {
-        if settingsWindow == nil { settingsWindow = SettingsWindow() }
+        if settingsWindow == nil {
+            let w = SettingsWindow()
+            w.onClose = { [weak self] in DispatchQueue.main.async { self?.settingsWindow = nil } }
+            settingsWindow = w
+        }
         settingsWindow?.show()
     }
     @objc private func quit() { controller.stop(); NSApp.terminate(nil) }
