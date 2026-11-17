@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
+            touchEngine.invalidateScreens()
+        }
         item.button?.image = AppDelegate.makeMenuIcon()
         item.button?.imagePosition = .imageOnly
 

@@ -102,6 +102,10 @@ File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** 
 | `app:Tên App` | Mở ứng dụng |
 | `click` | Click chuột trái (không kết hợp với `+hold`/`+double`) |
 | `sleep`, `displaysleep` | Cho Mac ngủ / tắt màn hình |
+| `mission` | Mission Control |
+| `expose` | Exposé – cửa sổ của app đang dùng (phím ⌃↓; cần bật trong Cài đặt hệ thống → Bàn phím → Phím tắt → Mission Control) |
+| `screensaver` | Bật màn hình chờ |
+| `lockscreen` | Khóa màn hình (⌃⌘Q) |
 | `none` | Tắt hành động mặc định của nút |
 
 **Thời gian:** `holdtime` (giây, 0.2–3.0, mặc định 0.8), `doubletime` (giây, 0.15–1.0, mặc định 0.3). Nút có `+double` sẽ chạy bấm nhanh trễ khoảng `doubletime`.

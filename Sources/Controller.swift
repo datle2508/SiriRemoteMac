@@ -53,8 +53,8 @@ final class Controller {
     func reloadMap() { map = loadMap(); touchEngine.start(force: false) }
 
     /// Hành động của nút: ưu tiên cấu hình riêng của app đang ở trên cùng, nếu không có thì dùng cấu hình mặc định.
-    func action(for key: String) -> Action? {
-        if let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
+    func action(for key: String, bundleID: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier) -> Action? {
+        if let bid = bundleID {
             if appDisabled[bid]?.contains(key) == true { return nil }
             if let a = appOverrides[bid]?[key] { return a }
         }
@@ -102,9 +102,10 @@ final class Controller {
             return
         }
         if debugLog { log("BUTTON \(key) (\(buttonNames.first { $0.value == key }?.key ?? "?")) \(down ? "down" : "up")") }
-        let tap = action(for: key)
-        let hold = action(for: key + "+HOLD")
-        let dbl = action(for: key + "+DOUBLE")
+        let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let tap = action(for: key, bundleID: bid)
+        let hold = action(for: key + "+HOLD", bundleID: bid)
+        let dbl = action(for: key + "+DOUBLE", bundleID: bid)
         guard tap != nil || hold != nil || dbl != nil, seize || !systemHandledKeys.contains(key) else { return }
 
         // Nút có hành động "giữ" hoặc "nhấn đúp": bấm nhanh được xử lý khi THẢ nút.
@@ -175,8 +176,7 @@ final class Controller {
             CGWarpMouseCursorPosition(anchor)
             pos = anchor
         }
-        CGEvent(mouseEventSource: nil, mouseType: down ? .leftMouseDown : .leftMouseUp,
-                mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
+        postMouse(down ? .leftMouseDown : .leftMouseUp, at: pos)
     }
 
     /// dir: +1 lên, -1 xuống, 0 dừng.

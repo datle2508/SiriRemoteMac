@@ -40,6 +40,10 @@ enum Action {
         if spec == "nav:forward" { return .nav(false) }
         if spec == "sleep" { return .command("/usr/bin/pmset", ["sleepnow"]) }
         if spec == "displaysleep" { return .command("/usr/bin/pmset", ["displaysleepnow"]) }
+        if spec == "mission" { return .command("/usr/bin/open", ["-a", "Mission Control"]) }
+        if spec == "expose" { return .key(125, .maskControl) }                 // Exposé: cửa sổ của app (phím tắt mặc định ⌃↓)
+        if spec == "screensaver" { return .command("/usr/bin/open", ["-a", "ScreenSaverEngine"]) }
+        if spec == "lockscreen" { return .key(12, [.maskControl, .maskCommand]) }   // ⌃⌘Q
         let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return nil }
         let arg = parts[1]
@@ -73,6 +77,7 @@ enum Action {
                 e.flags = flags
                 e.post(tap: .cghidEventTap)
             }
+            if !flags.isEmpty { releaseModifiers() }
         case .media(let key):
             postMediaKey(key, down: true)       // nhấn
             postMediaKey(key, down: false)      // thả
@@ -88,9 +93,8 @@ enum Action {
             try? p.run()
         case .rightClick:
             let pos = CGEvent(source: nil)?.location ?? .zero
-            for type in [CGEventType.rightMouseDown, .rightMouseUp] {
-                CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .right)?.post(tap: .cghidEventTap)
-            }
+            postMouse(.rightMouseDown, at: pos, button: .right)
+            postMouse(.rightMouseUp, at: pos, button: .right)
         case .toggleTouch:
             toggleTouchMode()
         case .nav(let back):
@@ -110,4 +114,25 @@ func postMediaKey(_ key: Int, down: Bool, isRepeat: Bool = false) {
                        timestamp: 0, windowNumber: 0, context: nil,
                        subtype: 8, data1: (key << 16) | (state << 8) | (isRepeat ? 1 : 0), data2: -1)?
         .cgEvent?.post(tap: .cghidEventTap)
+}
+
+
+/// Gửi sự kiện chuột sạch: luôn xóa cờ phím bổ trợ (⌘ còn sót sẽ khiến Safari mở link ở tab mới) và đặt clickState.
+func postMouse(_ type: CGEventType, at pos: CGPoint, button: CGMouseButton = .left, clickState: Int64 = 1) {
+    guard let e = CGEvent(mouseEventSource: mouseSource, mouseType: type, mouseCursorPosition: pos, mouseButton: button) else { return }
+    e.flags = []
+    if type != .mouseMoved { e.setIntegerValueField(.mouseEventClickState, value: clickState) }
+    e.post(tap: .cghidEventTap)
+}
+
+/// Nguồn sự kiện riêng: không thừa hưởng trạng thái phím bổ trợ của bàn phím thật.
+let mouseSource = CGEventSource(stateID: .privateState)
+
+/// Sau phím tắt có bổ trợ (⌘, ⌃…) gửi thêm sự kiện nhả bổ trợ để hệ thống không giữ nhầm trạng thái.
+func releaseModifiers() {
+    if let e = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) {
+        e.type = .flagsChanged
+        e.flags = []
+        e.post(tap: .cghidEventTap)
+    }
 }

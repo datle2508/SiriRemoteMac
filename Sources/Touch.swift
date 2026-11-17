@@ -62,17 +62,7 @@ func navSwipe(back: Bool) {
         carry += f.delta * dir
         let d = Int32(carry.rounded())
         carry -= Double(d)
-        guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
-                              wheel1: 0, wheel2: d, wheel3: 0) else { return }
-        func setI(_ id: UInt32, _ val: Int64) { if let fld = CGEventField(rawValue: id) { e.setIntegerValueField(fld, value: val) } }
-        func setD(_ id: UInt32, _ val: Double) { if let fld = CGEventField(rawValue: id) { e.setDoubleValueField(fld, value: val) } }
-        setI(88, 1)                                    // isContinuous
-        if f.momentum == 0 { setI(99, f.phase) }       // scrollPhase (trackpad thật không đặt khi đang quán tính)
-        else { setI(123, f.momentum); setI(173, f.momentum) }
-        if f.phase != 0 || f.momentum != 0 { setI(100, 1) }   // scrollCount
-        setI(137, 1)
-        if d != 0 { setD(175, -Double(d) / 10.0); setD(177, -Double(d) * 0.75) }
-        e.post(tap: .cghidEventTap)
+        postScroll(v: 0, h: d, phase: f.phase, momentum: f.momentum)
     }
 
     navTimer?.cancel()
@@ -91,6 +81,21 @@ func navSwipe(back: Bool) {
 }
 
 private var navTimer: DispatchSourceTimer?
+
+/// Gửi một sự kiện cuộn "như trackpad": liên tục (pixel) kèm pha cuộn (1 bắt đầu, 2 đang cuộn, 4 nhấc tay, 128 mayBegin)
+/// hoặc pha quán tính (1 bắt đầu, 2 tiếp tục, 3 kết thúc). Cấu trúc theo bản ghi ScrollSniffer của trackpad thật.
+func postScroll(v: Int32, h: Int32, phase: Int64, momentum: Int64 = 0) {
+    guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+                          wheel1: v, wheel2: h, wheel3: 0) else { return }
+    func setI(_ id: UInt32, _ val: Int64) { if let f = CGEventField(rawValue: id) { e.setIntegerValueField(f, value: val) } }
+    func setD(_ id: UInt32, _ val: Double) { if let f = CGEventField(rawValue: id) { e.setDoubleValueField(f, value: val) } }
+    setI(88, 1)                                                  // isContinuous
+    if momentum == 0 { setI(99, phase) } else { setI(123, momentum); setI(173, momentum) }
+    if phase != 0 || momentum != 0 { setI(100, 1) }              // scrollCount
+    setI(137, 1)
+    if h != 0 { setD(175, -Double(h) / 10.0); setD(177, -Double(h) * 0.75) }
+    e.post(tap: .cghidEventTap)
+}
 
 /// Đổi qua lại giữa chế độ con trỏ và chế độ vuốt/chạm; lưu vào file cấu hình.
 func toggleTouchMode() {
@@ -181,6 +186,10 @@ final class TouchEngine {
     private var scrollSamples: [(t: Double, x: Float, y: Float)] = []
     private var didScroll = false
     private var inertiaTimer: Timer?
+    private var inertiaActive = false
+    private var scrollStarted = false
+    private var smoothX: Float = 0
+    private var smoothY: Float = 0
 
     var isRunning: Bool { !devices.isEmpty }
 
@@ -225,6 +234,7 @@ final class TouchEngine {
         deviceList = nil
         runningMode = .off
         stopInertia()
+        if scrollStarted { scrollStarted = false; postScroll(v: 0, h: 0, phase: 4) }
         if tapDragging { tapDragging = false; mouseButtonDown = false; postMouse(.leftMouseUp, at: currentPos(), clickState: 2) }
         inSession = false
         lastCount = 0
@@ -249,7 +259,7 @@ final class TouchEngine {
             maxFingers = active.count; lastCount = active.count; travel = 0
             scrollRemX = 0; scrollRemY = 0
             cursorDecided = false; bufX = 0; bufY = 0
-            didScroll = false; scrollSamples.removeAll()
+            didScroll = false; scrollSamples.removeAll(); smoothX = 0; smoothY = 0
             stopInertia()                                   // chạm vào là dừng cuộn quán tính
             if tapClick, touchMode == .cursor, active.count == 1, timestamp - lastTapEnd < 0.3 {
                 tapDragging = true                          // chạm rồi đặt ngón xuống ngay: giữ chuột để kéo
@@ -308,7 +318,7 @@ final class TouchEngine {
         }
         if didScroll {                                      // vừa cuộn hai ngón: tiếp tục cuộn giảm dần
             didScroll = false
-            if scrollMomentum { startInertia(endTime: ts) }
+            finishScroll(endTime: ts)
             return
         }
         if fingers == 1 {
@@ -345,12 +355,6 @@ final class TouchEngine {
 
     private func currentPos() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
 
-    private func postMouse(_ type: CGEventType, at pos: CGPoint, clickState: Int64 = 1) {
-        guard let e = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left) else { return }
-        e.setIntegerValueField(.mouseEventClickState, value: clickState)
-        e.post(tap: .cghidEventTap)
-    }
-
     private func click() {
         let pos = currentPos()
         postMouse(.leftMouseDown, at: pos)
@@ -368,14 +372,18 @@ final class TouchEngine {
         return cursorHistory.first?.p
     }
 
+    private var cachedBounds: CGRect?
     private func screenBounds() -> CGRect {
+        if let b = cachedBounds { return b }
         var count: UInt32 = 0
         var ids = [CGDirectDisplayID](repeating: 0, count: 16)
         CGGetActiveDisplayList(16, &ids, &count)
         var r = CGRect.null
         for i in 0..<Int(count) { r = r.union(CGDisplayBounds(ids[i])) }
+        cachedBounds = r
         return r
     }
+    func invalidateScreens() { cachedBounds = nil }
 
     /// dt: thời gian (giây) mà dx, dy đã diễn ra; mặc định là một khung hình.
     private func moveCursor(_ dx: Float, _ dy: Float, dt: Double? = nil) {
@@ -396,7 +404,12 @@ final class TouchEngine {
             pos.y = min(max(pos.y, b.minY), b.maxY - 1)
         }
         let type: CGEventType = mouseButtonDown ? .leftMouseDragged : .mouseMoved
-        CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
+        if let e = CGEvent(mouseEventSource: mouseSource, mouseType: type, mouseCursorPosition: pos, mouseButton: .left) {
+            e.flags = []
+            e.setDoubleValueField(.mouseEventDeltaX, value: Double(dx) * k)
+            e.setDoubleValueField(.mouseEventDeltaY, value: -Double(dy) * k)
+            e.post(tap: .cghidEventTap)
+        }
         let now = ProcessInfo.processInfo.systemUptime
         cursorHistory.append((now, pos))
         cursorHistory.removeAll { now - $0.t > 0.5 }
@@ -405,21 +418,32 @@ final class TouchEngine {
     private func scroll(_ dx: Float, _ dy: Float) {
         let sign: Float = naturalScroll ? -1 : 1
         let k = Float(scrollSpeed) * 1500
-        let px = dx * k * -sign, py = dy * k * sign
+        // làm mượt nhẹ (lọc thông thấp) để cuộn không bị khựng khi khung cảm ứng đến không đều
+        smoothX = smoothX * 0.35 + dx * k * -sign * 0.65
+        smoothY = smoothY * 0.35 + dy * k * sign * 0.65
+        let px = smoothX, py = smoothY
         didScroll = true
         scrollSamples.append((lastFrameTime, px, py))
         if scrollSamples.count > 8 { scrollSamples.removeFirst() }
-        emitScroll(px, py)
+        emitScroll(px, py, phase: scrollStarted ? 2 : 1)
+        scrollStarted = true
     }
 
     /// Gửi sự kiện cuộn (điểm ảnh), cộng dồn phần lẻ.
-    private func emitScroll(_ x: Float, _ y: Float) {
+    private func emitScroll(_ x: Float, _ y: Float, phase: Int64, momentum: Int64 = 0) {
         scrollRemX += x; scrollRemY += y
         let v = Int32(scrollRemY), h = Int32(scrollRemX)
         guard v != 0 || h != 0 else { return }
         scrollRemY -= Float(v); scrollRemX -= Float(h)
-        CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
-                wheel1: v, wheel2: h, wheel3: 0)?.post(tap: .cghidEventTap)
+        postScroll(v: v, h: h, phase: phase, momentum: momentum)
+    }
+
+    /// Nhấc tay sau khi cuộn: gửi "ended", rồi (nếu bật) quán tính theo pha momentum của hệ thống.
+    private func finishScroll(endTime: Double) {
+        scrollStarted = false
+        smoothX = 0; smoothY = 0
+        postScroll(v: 0, h: 0, phase: 4)
+        if scrollMomentum { startInertia(endTime: endTime) }
     }
 
     // MARK: Cuộn quán tính
@@ -432,17 +456,21 @@ final class TouchEngine {
         var vy = max(min(recent.reduce(0) { $0 + $1.y } / span, 6000), -6000)
         guard abs(vx) > 150 || abs(vy) > 150 else { return }
         scrollRemX = 0; scrollRemY = 0
+        var first = true
+        inertiaActive = true
         inertiaTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] t in
             guard let self = self else { t.invalidate(); return }
             vx *= 0.955; vy *= 0.955                                                // ma sát: giảm dần
-            if abs(vx) < 30 && abs(vy) < 30 { t.invalidate(); self.inertiaTimer = nil; return }
-            self.emitScroll(vx / 60, vy / 60)
+            if abs(vx) < 30 && abs(vy) < 30 { self.stopInertia(); return }
+            self.emitScroll(vx / 60, vy / 60, phase: 0, momentum: first ? 1 : 2)
+            first = false
         }
     }
 
     private func stopInertia() {
         inertiaTimer?.invalidate()
         inertiaTimer = nil
+        if inertiaActive { inertiaActive = false; postScroll(v: 0, h: 0, phase: 0, momentum: 3) }
     }
 }
 
