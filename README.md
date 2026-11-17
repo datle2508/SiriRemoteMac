@@ -39,6 +39,13 @@ Menu 🎛 → **Khởi động cùng macOS** (chỉ khi chạy từ `.app`).
 App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cách mà HyperVibe, Remote Buddy… dùng). Không cần quyền thêm ngoài Accessibility.
 
 - **Con trỏ + cuộn:** một ngón di chuyển con trỏ, hai ngón cuộn; nhấn touchpad và di chuyển để kéo thả.
+- **Giống Magic Trackpad (một phần):**
+  - Con trỏ có đường cong tăng tốc (chậm = chính xác, nhanh = đi xa), chỉnh bằng *Tốc độ con trỏ*.
+  - **Click trúng đích:** khi nhấn touchpad, app lấy lại vị trí con trỏ ngay trước lúc nhấn và bỏ qua rung nhẹ cho tới khi bạn thật sự kéo (tắt bằng *Giữ yên con trỏ khi nhấn touchpad*, khóa `clicksteady`).
+  - **Chạm nhẹ hai ngón** = click chuột phải (hành động `rightclick`, đổi được ở tab Cảm ứng).
+  - **Chạm rồi kéo:** bật *Chạm nhẹ để click*; chạm một lần rồi đặt ngón xuống lại ngay và kéo để kéo thả (nhả ngón để thả).
+  - **Cuộn quán tính:** nhấc ngón sau khi cuộn hai ngón thì trang cuộn tiếp và chậm dần (khóa `scrollmomentum`); chạm lại để dừng. Đây là quán tính do app tự tính, không có hiệu ứng đàn hồi ở cuối trang.
+  - Không làm được: Force Click, zoom hai ngón, vuốt 3 ngón (remote không gửi lực nhấn và bề mặt quá nhỏ).
 - **Chỉ vuốt / chạm:** không di chuyển con trỏ; vuốt nhanh 4 hướng (`swipeleft`, `swiperight`, `swipeup`, `swipedown`) và chạm 2 ngón (`twofingertap`) chạy hành động bạn gán.
 - Tùy chọn: chạm nhẹ để click, cuộn tự nhiên, tốc độ con trỏ/cuộn. Đổi chế độ nhanh ở menu 🎛 → **Chế độ cảm ứng**.
 

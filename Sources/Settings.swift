@@ -31,7 +31,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
                   ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
                   ("nav:back", "Back (thử nghiệm: hiệu ứng vuốt)"), ("nav:forward", "Forward (thử nghiệm: hiệu ứng vuốt)")]),
-        ("Chuột", [("click", "Click chuột"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống")]),
+        ("Chuột", [("click", "Click chuột"), ("rightclick", "Click phải"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống")]),
         ("Hệ thống", [("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
                       ("toggletouch", "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)")]),
     ]
@@ -326,7 +326,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             touchHost.addArrangedSubview(hstack([NSTextField(labelWithString: "Tốc độ con trỏ:"), slider("touchspeed", 0.3, 4, 1.5)]))
             touchHost.addArrangedSubview(hstack([NSTextField(labelWithString: "Tốc độ cuộn:"), slider("scrollspeed", 0.2, 3, 1.0)]))
             touchHost.addArrangedSubview(vstack([checkbox("naturalscroll", "Cuộn tự nhiên (đảo chiều)", "1"),
-                                                 checkbox("tapclick", "Chạm nhẹ để click", "0")]))
+                                                 checkbox("tapclick", "Chạm nhẹ để click (chạm rồi đặt ngón xuống kéo = kéo thả)", "0"),
+                                                 checkbox("scrollmomentum", "Cuộn có quán tính (tiếp tục cuộn sau khi nhấc tay)", "1"),
+                                                 checkbox("clicksteady", "Giữ yên con trỏ khi nhấn touchpad để click", "1")]))
         }
         touchHost.addArrangedSubview(makeGrid(title: "Cử chỉ", columns: [("Hành động", "")], rows: SettingsWindow.gestureRows))
     }

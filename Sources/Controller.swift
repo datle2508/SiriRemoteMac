@@ -170,7 +170,11 @@ final class Controller {
 
     func mouse(down: Bool) {
         mouseButtonDown = down
-        let pos = CGEvent(source: nil)?.location ?? .zero
+        var pos = CGEvent(source: nil)?.location ?? .zero
+        if down, let anchor = touchEngine.beginPress() {     // lấy lại vị trí trước khi ngón tay lăn đi lúc nhấn
+            CGWarpMouseCursorPosition(anchor)
+            pos = anchor
+        }
         CGEvent(mouseEventSource: nil, mouseType: down ? .leftMouseDown : .leftMouseUp,
                 mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
     }

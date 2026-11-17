@@ -105,6 +105,18 @@ final class TouchEngine {
     private var cursorDecided = false       // false: đang giữ con trỏ đứng yên, chờ xem có phải cú vuốt không
     private var bufX: Float = 0
     private var bufY: Float = 0
+    private var lastFrameTime = 0.0
+    private var frameDt = 1.0 / 60
+    // Click chính xác: nhớ vị trí con trỏ vài trăm ms gần nhất để lấy lại khi nhấn touchpad
+    private var cursorHistory: [(t: Double, p: CGPoint)] = []
+    private var pressTravel: Float = 0
+    // Chạm rồi kéo
+    private var lastTapEnd = -10.0
+    private var tapDragging = false
+    // Cuộn có quán tính
+    private var scrollSamples: [(t: Double, x: Float, y: Float)] = []
+    private var didScroll = false
+    private var inertiaTimer: Timer?
 
     var isRunning: Bool { !devices.isEmpty }
 
@@ -148,6 +160,8 @@ final class TouchEngine {
         devices.removeAll()
         deviceList = nil
         runningMode = .off
+        stopInertia()
+        if tapDragging { tapDragging = false; mouseButtonDown = false; postMouse(.leftMouseUp, at: currentPos(), clickState: 2) }
         inSession = false
         lastCount = 0
     }
@@ -156,6 +170,8 @@ final class TouchEngine {
 
     func process(_ pts: [TouchPoint], timestamp: Double) {
         guard isRunning else { return }
+        frameDt = min(max(timestamp - lastFrameTime, 0.004), 0.05)
+        lastFrameTime = timestamp
         let active = pts.filter { $0.state == 3 || $0.state == 4 }
         if active.isEmpty {
             if inSession { endSession(timestamp) }
@@ -169,6 +185,14 @@ final class TouchEngine {
             maxFingers = active.count; lastCount = active.count; travel = 0
             scrollRemX = 0; scrollRemY = 0
             cursorDecided = false; bufX = 0; bufY = 0
+            didScroll = false; scrollSamples.removeAll()
+            stopInertia()                                   // chạm vào là dừng cuộn quán tính
+            if tapClick, touchMode == .cursor, active.count == 1, timestamp - lastTapEnd < 0.3 {
+                tapDragging = true                          // chạm rồi đặt ngón xuống ngay: giữ chuột để kéo
+                cursorDecided = true
+                mouseButtonDown = true
+                postMouse(.leftMouseDown, at: currentPos(), clickState: 2)
+            }
             return
         }
         maxFingers = max(maxFingers, active.count)
@@ -201,7 +225,7 @@ final class TouchEngine {
         }
         guard decide else { return }
         cursorDecided = true
-        moveCursor(bufX, bufY)
+        moveCursor(bufX, bufY, dt: ts - startTime)
         bufX = 0; bufY = 0
     }
 
@@ -212,6 +236,17 @@ final class TouchEngine {
         let dx = lastCentroid.x - startCentroid.x, dy = lastCentroid.y - startCentroid.y
         let fingers = maxFingers
         if debugLog { log("TOUCH kết thúc: ngón=\(fingers) dx=\(dx) dy=\(dy) thời gian=\(dur) quãng=\(travel)") }
+        if tapDragging {                                    // nhả chuột sau khi kéo
+            tapDragging = false; mouseButtonDown = false
+            postMouse(.leftMouseUp, at: currentPos(), clickState: 2)
+            lastTapEnd = -10
+            return
+        }
+        if didScroll {                                      // vừa cuộn hai ngón: tiếp tục cuộn giảm dần
+            didScroll = false
+            if scrollMomentum { startInertia(endTime: ts) }
+            return
+        }
         if fingers == 1 {
             let minDist: Float = touchMode == .cursor ? 0.3 : 0.2
             let maxTime = touchMode == .cursor ? 0.4 : 0.7
@@ -221,8 +256,11 @@ final class TouchEngine {
                 fire(key)
                 return
             }
-            if travel >= 0.04, touchMode == .cursor, !cursorDecided { moveCursor(bufX, bufY) }   // không phải vuốt: trả lại chuyển động đã giữ
-            else if tapClick, dur < 0.25, travel < 0.04 { click() }
+            if travel >= 0.04, touchMode == .cursor, !cursorDecided { moveCursor(bufX, bufY, dt: dur) }   // không phải vuốt: trả lại chuyển động đã giữ
+            else if tapClick, dur < 0.25, travel < 0.04 {
+                click()
+                if touchMode == .cursor { lastTapEnd = ts }
+            }
         } else if fingers == 2, dur < 0.25, travel < 0.06 {
             fire("TWOFINGERTAP")
         }
@@ -241,11 +279,29 @@ final class TouchEngine {
         }
     }
 
+    private func currentPos() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
+
+    private func postMouse(_ type: CGEventType, at pos: CGPoint, clickState: Int64 = 1) {
+        guard let e = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left) else { return }
+        e.setIntegerValueField(.mouseEventClickState, value: clickState)
+        e.post(tap: .cghidEventTap)
+    }
+
     private func click() {
-        let pos = CGEvent(source: nil)?.location ?? .zero
-        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
-            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
-        }
+        let pos = currentPos()
+        postMouse(.leftMouseDown, at: pos)
+        postMouse(.leftMouseUp, at: pos)
+    }
+
+    /// Gọi khi touchpad vừa bị nhấn: trả về vị trí con trỏ khoảng 0,12 s trước đó (trước khi ngón tay lăn đi
+    /// do lực nhấn) để click trúng đích; nil nếu không cần.
+    func beginPress() -> CGPoint? {
+        pressTravel = 0
+        guard clickSteady, touchMode == .cursor, !tapDragging else { return nil }
+        let now = ProcessInfo.processInfo.systemUptime
+        cursorHistory.removeAll { now - $0.t > 0.5 }
+        if let h = cursorHistory.last(where: { now - $0.t >= 0.12 }) { return h.p }
+        return cursorHistory.first?.p
     }
 
     private func screenBounds() -> CGRect {
@@ -257,12 +313,19 @@ final class TouchEngine {
         return r
     }
 
-    private func moveCursor(_ dx: Float, _ dy: Float) {
-        let d = Double(hypotf(dx, dy))
-        let k = touchSpeed * (1.0 + min(d * 20.0, 2.0)) * 1400.0     // điểm ảnh trên một đơn vị chuẩn hóa
-        var pos = CGEvent(source: nil)?.location ?? .zero
+    /// dt: thời gian (giây) mà dx, dy đã diễn ra; mặc định là một khung hình.
+    private func moveCursor(_ dx: Float, _ dy: Float, dt: Double? = nil) {
+        if mouseButtonDown, !tapDragging, clickSteady {     // đang nhấn touchpad: bỏ qua rung nhẹ, chỉ kéo khi thật sự di chuyển
+            pressTravel += hypotf(dx, dy)
+            if pressTravel < 0.05 { return }
+        }
+        // Đường cong tăng tốc kiểu trackpad: chậm = chính xác, nhanh = đi xa
+        let v = Double(hypotf(dx, dy)) / max(dt ?? frameDt, 0.004)          // đơn vị chuẩn hóa / giây
+        let gain = 0.55 + 2.4 * (1 - exp(-v / 1.4))
+        let k = touchSpeed * 800.0 * gain                                  // điểm ảnh trên một đơn vị chuẩn hóa
+        var pos = currentPos()
         pos.x += Double(dx) * k
-        pos.y -= Double(dy) * k                                     // trục y của cảm ứng hướng lên
+        pos.y -= Double(dy) * k                                            // trục y của cảm ứng hướng lên
         let b = screenBounds()
         if !b.isNull {
             pos.x = min(max(pos.x, b.minX), b.maxX - 1)
@@ -270,21 +333,54 @@ final class TouchEngine {
         }
         let type: CGEventType = mouseButtonDown ? .leftMouseDragged : .mouseMoved
         CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .left)?.post(tap: .cghidEventTap)
+        let now = ProcessInfo.processInfo.systemUptime
+        cursorHistory.append((now, pos))
+        cursorHistory.removeAll { now - $0.t > 0.5 }
     }
 
     private func scroll(_ dx: Float, _ dy: Float) {
         let sign: Float = naturalScroll ? -1 : 1
         let k = Float(scrollSpeed) * 1500
-        scrollRemY += dy * k * sign
-        scrollRemX += dx * k * -sign
+        let px = dx * k * -sign, py = dy * k * sign
+        didScroll = true
+        scrollSamples.append((lastFrameTime, px, py))
+        if scrollSamples.count > 8 { scrollSamples.removeFirst() }
+        emitScroll(px, py)
+    }
+
+    /// Gửi sự kiện cuộn (điểm ảnh), cộng dồn phần lẻ.
+    private func emitScroll(_ x: Float, _ y: Float) {
+        scrollRemX += x; scrollRemY += y
         let v = Int32(scrollRemY), h = Int32(scrollRemX)
         guard v != 0 || h != 0 else { return }
         scrollRemY -= Float(v); scrollRemX -= Float(h)
         CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
                 wheel1: v, wheel2: h, wheel3: 0)?.post(tap: .cghidEventTap)
     }
-}
 
+    // MARK: Cuộn quán tính
+
+    private func startInertia(endTime: Double) {
+        let recent = scrollSamples.filter { endTime - $0.t < 0.1 }
+        guard recent.count >= 2, let first = recent.first, let last = recent.last, endTime - last.t < 0.06 else { return }
+        let span = Float(max(last.t - first.t, 0.016) + frameDt)
+        var vx = max(min(recent.reduce(0) { $0 + $1.x } / span, 6000), -6000)       // điểm ảnh / giây
+        var vy = max(min(recent.reduce(0) { $0 + $1.y } / span, 6000), -6000)
+        guard abs(vx) > 150 || abs(vy) > 150 else { return }
+        scrollRemX = 0; scrollRemY = 0
+        inertiaTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] t in
+            guard let self = self else { t.invalidate(); return }
+            vx *= 0.955; vy *= 0.955                                                // ma sát: giảm dần
+            if abs(vx) < 30 && abs(vy) < 30 { t.invalidate(); self.inertiaTimer = nil; return }
+            self.emitScroll(vx / 60, vy / 60)
+        }
+    }
+
+    private func stopInertia() {
+        inertiaTimer?.invalidate()
+        inertiaTimer = nil
+    }
+}
 
 extension TouchMode {
     var title: String {

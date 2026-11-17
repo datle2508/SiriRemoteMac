@@ -43,6 +43,9 @@ let defaultMap: [String: String] = [
     "volup": "media:volumeup",
     "voldown": "media:volumedown",
     "remotemodel": "auto",          // auto | gen1 | gen23: quyết định các nút hiển thị trong cài đặt
+    "twofingertap": "rightclick",   // chạm nhẹ hai ngón = click chuột phải
+    "scrollmomentum": "1",          // 1 = cuộn tiếp (giảm dần) sau khi nhấc tay
+    "clicksteady": "1",             // 1 = giữ yên con trỏ khi nhấn touchpad để click trúng đích
     "touchmode": "cursor",          // cảm ứng: cursor (con trỏ + cuộn + vuốt), swipe (chỉ vuốt/chạm), off
     "touchspeed": "1.5",            // tốc độ con trỏ (0.3 – 5)
     "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
@@ -107,6 +110,8 @@ var touchSpeed = 1.5
 var scrollSpeed = 1.0
 var naturalScroll = true
 var tapClick = false
+var scrollMomentum = true
+var clickSteady = true
 var touchFamilies: Set<Int32> = [160, 145]   // 160: Siri Remote đời 1 (đo trên máy thật), 145: đời 3
 var mouseButtonDown = false      // Controller đặt khi nút touchpad đang được nhấn (để kéo thả bằng cảm ứng)
 
@@ -125,7 +130,8 @@ var appDisabled: [String: Set<String>] = [:]     // nút bị tắt ("none") ri�
 
 /// Các khóa là tùy chọn (không phải nút bấm / cử chỉ).
 let settingKeys: Set<String> = ["holdtime", "doubletime", "remotemodel", "navinvert", "touchmode",
-                                "touchspeed", "scrollspeed", "naturalscroll", "tapclick", "touchfamily"]
+                                "touchspeed", "scrollspeed", "naturalscroll", "tapclick", "touchfamily",
+                                "scrollmomentum", "clicksteady"]
 
 /// Đọc file cấu hình (qua ConfigFile) → bản đồ nút → hành động; cập nhật các tùy chọn toàn cục.
 func loadMap() -> [String: Action] {
@@ -147,6 +153,8 @@ func loadMap() -> [String: Action] {
     if let v = take("navinvert") { navInvert = flag(v) }
     if let v = take("naturalscroll") { naturalScroll = !(v == "0" || v.lowercased() == "false") }
     if let v = take("tapclick") { tapClick = flag(v) }
+    if let v = take("scrollmomentum") { scrollMomentum = !(v == "0" || v.lowercased() == "false") }
+    if let v = take("clicksteady") { clickSteady = !(v == "0" || v.lowercased() == "false") }
     if let v = take("touchfamily") {   // danh sách cách nhau bằng dấu phẩy; luôn gồm 160 và 145
         touchFamilies = Set(v.split(whereSeparator: { $0 == "," || $0 == " " }).compactMap { Int32($0) }).union([160, 145])
     }

@@ -13,6 +13,7 @@ enum Action {
     case scroll(Int32)          // +1 lên, -1 xuống
     case command(String, [String])
     case nav(Bool)                  // true = Back, false = Forward (hiệu ứng vuốt như Magic Trackpad)
+    case rightClick                 // click chuột phải
     case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
 
     private static let keyCodes: [String: CGKeyCode] = [
@@ -34,6 +35,7 @@ enum Action {
     static func parse(_ spec: String) -> Action? {
         if spec == "click" { return .click }
         if spec == "toggletouch" { return .toggleTouch }
+        if spec == "rightclick" { return .rightClick }
         if spec == "nav:back" { return .nav(true) }
         if spec == "nav:forward" { return .nav(false) }
         if spec == "sleep" { return .command("/usr/bin/pmset", ["sleepnow"]) }
@@ -84,6 +86,11 @@ enum Action {
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = args
             try? p.run()
+        case .rightClick:
+            let pos = CGEvent(source: nil)?.location ?? .zero
+            for type in [CGEventType.rightMouseDown, .rightMouseUp] {
+                CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: pos, mouseButton: .right)?.post(tap: .cghidEventTap)
+            }
         case .toggleTouch:
             toggleTouchMode()
         case .nav(let back):
