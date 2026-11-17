@@ -380,7 +380,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         advancedHost.addArrangedSubview(vstack([
             heading("Hiệu ứng Back/Forward (hành động thử nghiệm nav:*)"),
             hstack([NSTextField(labelWithString: "Thời gian:"), slider("navduration", 0.15, 1.0, 0.25)]),
-            hstack([NSTextField(labelWithString: "Quãng vuốt:"), slider("navdistance", 0.4, 2.0, 0.9)]),
+            hstack([NSTextField(labelWithString: "Quãng vuốt:"), slider("navdistance", 0.4, 6.0, 0.9)]),
             checkbox("navinvert", "Đảo chiều", "0"),
             note("Nếu thấy giật/lag: giảm Thời gian và Quãng vuốt; nếu không đổi trang: tăng Quãng vuốt."),
         ]))
