@@ -76,7 +76,6 @@ func navSwipe(back: Bool) {
     }
 
     navTimer?.cancel()
-    let start = ProcessInfo.processInfo.systemUptime
     var idx = 0
     let timer = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive))
     timer.schedule(deadline: .now(), repeating: .microseconds(16667), leeway: .microseconds(300))
