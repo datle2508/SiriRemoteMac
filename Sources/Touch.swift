@@ -4,7 +4,7 @@
 import Cocoa
 
 var navInvert = false
-var navDuration = 0.3        // giây
+var navDuration = 0.25       // giây
 var navDistance = 0.9        // tỉ lệ chiều rộng cửa sổ
 
 /// Khung của cửa sổ phía trước (của app đang ở trên cùng), theo tọa độ màn hình của CGEvent.
@@ -36,34 +36,49 @@ func navSwipe(back: Bool) {
     let total = max(width * navDistance, 600)
     let duration = navDuration
 
-    func post(_ delta: Int32, _ phase: Int64) {
+    func post(_ delta: Int32, _ phase: Int64, _ momentum: Int64 = 0) {
         guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
                               wheel1: 0, wheel2: delta, wheel3: 0) else { return }
-        if let f = CGEventField(rawValue: 88) { e.setIntegerValueField(f, value: 1) }       // isContinuous
-        if let f = CGEventField(rawValue: 99) { e.setIntegerValueField(f, value: phase) }   // scrollPhase
+        if let f = CGEventField(rawValue: 88) { e.setIntegerValueField(f, value: 1) }          // isContinuous
+        if let f = CGEventField(rawValue: 99) { e.setIntegerValueField(f, value: phase) }      // scrollPhase
+        if let f = CGEventField(rawValue: 123) { e.setIntegerValueField(f, value: momentum) }  // momentumPhase
         e.post(tap: .cghidEventTap)
     }
 
-    // Dựa theo thời gian thực (không theo số nhịp) để chuyển động mượt dù nhịp timer lệch; 60 sự kiện/giây (bằng tần số quét màn hình, tránh dồn hàng đợi sự kiện)
+    // Theo thời gian thực (không theo số nhịp) và 60 sự kiện/giây (bằng tần số quét màn hình, tránh dồn hàng đợi).
+    // Cú vuốt tăng tốc dần và kết thúc khi còn đang nhanh (như một cú "hất" tay), rồi có vài sự kiện quán tính giảm dần:
+    // trình duyệt dựa vào vận tốc lúc nhấc tay để quyết định chuyển trang.
     navTimer?.cancel()
     let start = ProcessInfo.processInfo.systemUptime
     var sent: Int32 = 0
     var started = false
+    var lastDelta: Int32 = 0
+    var momentumStep = 0
     let timer = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive))
     timer.schedule(deadline: .now(), repeating: .microseconds(16667), leeway: .microseconds(500))
     timer.setEventHandler {
-        let t = min((ProcessInfo.processInfo.systemUptime - start) / duration, 1.0)
-        let eased = 0.5 - 0.5 * cos(Double.pi * t)                 // tăng tốc rồi giảm tốc như ngón tay thật
-        let target = Int32((dir * total * eased).rounded())
-        let delta = target - sent
-        if delta != 0 {
-            post(delta, started ? 2 : 1)                           // sự kiện đầu mang luôn quãng vuốt đầu tiên
-            started = true
-            sent = target
-        }
-        if t >= 1.0 {
-            if started { post(0, 4) }                              // nhấc tay
-            timer.cancel()
+        if momentumStep == 0 {
+            let t = min((ProcessInfo.processInfo.systemUptime - start) / duration, 1.0)
+            let eased = t * t                                       // tăng tốc dần, nhanh nhất lúc nhấc tay
+            let target = Int32((dir * total * eased).rounded())
+            let delta = target - sent
+            if delta != 0 {
+                post(delta, started ? 2 : 1)                        // sự kiện đầu mang luôn quãng vuốt đầu tiên
+                started = true
+                sent = target
+                lastDelta = delta
+            }
+            if t >= 1.0 {
+                if started { post(0, 4) }                           // nhấc tay
+                momentumStep = 1
+            }
+        } else {
+            let k = momentumStep
+            if !started || k > 6 { timer.cancel(); return }
+            if k == 6 { post(0, 0, 3); timer.cancel(); return }     // kết thúc quán tính
+            let d = Int32((Double(lastDelta) * pow(0.78, Double(k))).rounded())
+            post(d, 0, k == 1 ? 1 : 2)                              // quán tính: bắt đầu / tiếp tục
+            momentumStep += 1
         }
     }
     navTimer = timer

@@ -49,7 +49,7 @@ let defaultMap: [String: String] = [
     "touchmode": "cursor",          // cảm ứng: cursor (con trỏ + cuộn + vuốt), swipe (chỉ vuốt/chạm), off
     "touchspeed": "1.5",            // tốc độ con trỏ (0.3 – 5)
     "scrollspeed": "1.0",           // tốc độ cuộn hai ngón (0.2 – 4)
-    "navduration": "0.3",           // thời gian cú vuốt Back/Forward (giây, 0.15 – 1.0)
+    "navduration": "0.25",           // thời gian cú vuốt Back/Forward (giây, 0.15 – 1.0)
     "navdistance": "0.9",           // quãng vuốt = tỉ lệ chiều rộng cửa sổ (0.4 – 2.0)
     "navinvert": "0",               // 1 = đảo chiều hiệu ứng Back/Forward (nav:back / nav:forward)
     "naturalscroll": "1",           // 1 = cuộn tự nhiên (đảo chiều), 0 = ngược lại
