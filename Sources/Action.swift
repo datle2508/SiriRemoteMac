@@ -14,6 +14,7 @@ enum Action {
     case command(String, [String])
     case nav(Bool)                  // true = Back, false = Forward (hiệu ứng vuốt như Magic Trackpad)
     case rightClick                 // click chuột phải
+    case dock(String)               // thông báo gửi cho Dock (Mission Control, Exposé, Show Desktop)
     case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
 
     private static let keyCodes: [String: CGKeyCode] = [
@@ -40,8 +41,9 @@ enum Action {
         if spec == "nav:forward" { return .nav(false) }
         if spec == "sleep" { return .command("/usr/bin/pmset", ["sleepnow"]) }
         if spec == "displaysleep" { return .command("/usr/bin/pmset", ["displaysleepnow"]) }
-        if spec == "mission" { return .command("/usr/bin/open", ["-a", "Mission Control"]) }
-        if spec == "expose" { return .key(125, .maskControl) }                 // Exposé: cửa sổ của app (phím tắt mặc định ⌃↓)
+        if spec == "mission" { return .dock("com.apple.expose.awake") }
+        if spec == "expose" { return .dock("com.apple.expose.front.awake") }   // Exposé: cửa sổ của app
+        if spec == "showdesktop" { return .dock("com.apple.showdesktop.awake") }
         if spec == "screensaver" { return .command("/usr/bin/open", ["-a", "ScreenSaverEngine"]) }
         if spec == "lockscreen" { return .key(12, [.maskControl, .maskCommand]) }   // ⌃⌘Q
         let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
@@ -95,6 +97,14 @@ enum Action {
             let pos = CGEvent(source: nil)?.location ?? .zero
             postMouse(.rightMouseDown, at: pos, button: .right)
             postMouse(.rightMouseUp, at: pos, button: .right)
+        case .dock(let name):
+            if !sendDockNotification(name) {            // dự phòng: phím tắt mặc định của macOS
+                switch name {
+                case "com.apple.expose.awake": Action.key(126, [.maskControl, .maskSecondaryFn]).run()
+                case "com.apple.expose.front.awake": Action.key(125, [.maskControl, .maskSecondaryFn]).run()
+                default: break
+                }
+            }
         case .toggleTouch:
             toggleTouchMode()
         case .nav(let back):
@@ -135,4 +145,14 @@ func releaseModifiers() {
         e.flags = []
         e.post(tap: .cghidEventTap)
     }
+}
+
+
+/// Gọi hàm riêng của Dock (CoreDockSendNotification) như phím Mission Control / Exposé thật; false nếu không tìm thấy hàm.
+func sendDockNotification(_ name: String) -> Bool {
+    typealias Fn = @convention(c) (CFString, Int32) -> Void
+    _ = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_NOW)
+    guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CoreDockSendNotification") else { return false }   // RTLD_DEFAULT
+    unsafeBitCast(sym, to: Fn.self)(name as CFString, 0)
+    return true
 }

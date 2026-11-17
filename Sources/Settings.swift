@@ -33,7 +33,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   ("nav:back", "Back (thử nghiệm: hiệu ứng vuốt)"), ("nav:forward", "Forward (thử nghiệm: hiệu ứng vuốt)")]),
         ("Chuột", [("click", "Click chuột"), ("rightclick", "Click phải"), ("scroll:up", "Cuộn lên"), ("scroll:down", "Cuộn xuống")]),
         ("Hệ thống", [("mission", "Mission Control"), ("expose", "Exposé (cửa sổ của app)"), ("screensaver", "Màn hình chờ"),
-                      ("lockscreen", "Khóa màn hình"), ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
+                      ("showdesktop", "Hiện màn hình nền"), ("lockscreen", "Khóa màn hình"), ("sleep", "Cho Mac ngủ"), ("displaysleep", "Tắt màn hình"),
                       ("toggletouch", "Đổi chế độ cảm ứng (con trỏ ↔ vuốt)")]),
     ]
     /// Biểu tượng SF Symbols cho từng hành động / hàng (nếu hệ thống không có thì bỏ qua, không lỗi).
@@ -46,7 +46,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         "key:pageup": "arrow.up.to.line", "key:pagedown": "arrow.down.to.line",
         "key:cmd+[": "chevron.backward", "key:cmd+]": "chevron.forward", "nav:back": "hand.draw", "nav:forward": "hand.draw",
         "click": "cursorarrow.click", "rightclick": "cursorarrow.click.2", "scroll:up": "arrow.up.circle", "scroll:down": "arrow.down.circle",
-        "mission": "rectangle.3.group", "expose": "macwindow.on.rectangle", "screensaver": "photo.tv", "lockscreen": "lock.fill",
+        "mission": "rectangle.3.group", "expose": "macwindow.on.rectangle", "screensaver": "photo.tv", "lockscreen": "lock.fill", "showdesktop": "menubar.dock.rectangle",
         "sleep": "moon.zzz.fill", "displaysleep": "display", "toggletouch": "arrow.left.arrow.right",
         "@app": "square.grid.2x2", "@key": "keyboard", "none": "nosign",
         // hàng nút / cử chỉ
