@@ -109,8 +109,13 @@ enum Action {
             toggleTouchMode()
         case .nav(let back):
             navSwipe(back: back)
-        case .click, .scroll:
-            break   // xử lý riêng vì cần biết lúc nhấn và lúc thả
+        case .click:                    // dùng khi click đi qua đường "giữ"/"nhấn đúp": nhấn rồi thả ngay
+            let pos = CGEvent(source: nil)?.location ?? .zero
+            postMouse(.leftMouseDown, at: pos)
+            postMouse(.leftMouseUp, at: pos)
+        case .scroll(let dir):
+            CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1,
+                    wheel1: dir * 300, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
         }
     }
 }
