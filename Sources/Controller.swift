@@ -158,8 +158,8 @@ final class Controller {
         seekKey = key
         if debugLog { log("SEEK start \(key) accessibility=\(AXIsProcessTrusted())") }
         postMediaKey(key, down: true, isRepeat: false)
-        seekTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.postMediaKey(key, down: true, isRepeat: true)
+        seekTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            postMediaKey(key, down: true, isRepeat: true)
         }
     }
 
