@@ -1,119 +1,90 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <!-- nền -->
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1b2338"/>
-      <stop offset="0.55" stop-color="#16263e"/>
-      <stop offset="1" stop-color="#0b1424"/>
+    <linearGradient id="bg" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#34363c"/>
+      <stop offset="0.5" stop-color="#16171a"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <filter id="blurBig" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="90"/></filter>
-    <filter id="blurMed" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="46"/></filter>
-    <filter id="blurSm" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
-    <filter id="shadow" x="-40%" y="-20%" width="180%" height="150%">
-      <feDropShadow dx="0" dy="34" stdDeviation="30" flood-color="#020611" flood-opacity="0.6"/>
-    </filter>
-    <clipPath id="tile"><rect x="64" y="64" width="896" height="896" rx="200"/></clipPath>
-    <clipPath id="body"><rect x="364" y="250" width="296" height="664" rx="132"/></clipPath>
-    <clipPath id="padClip"><rect x="400" y="290" width="224" height="256" rx="100"/></clipPath>
-
-    <!-- viền kính: sáng ở góc trên trái, tối ở góc dưới phải -->
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8fb4ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8fb4ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#b79bff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#b79bff" stop-opacity="0"/>
+    </radialGradient>
     <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
-      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0.25"/>
-      <stop offset="0.7" stop-color="#9fd0ff" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.6"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="0.7" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.55"/>
     </linearGradient>
-    <linearGradient id="glassFill" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
-      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.10"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="pad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.30"/>
     </linearGradient>
     <linearGradient id="spec" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
       <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="padGlass" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0a1226" stop-opacity="0.78"/>
-      <stop offset="1" stop-color="#050a18" stop-opacity="0.9"/>
-    </linearGradient>
-    <radialGradient id="orb" cx="0.5" cy="0.45" r="0.55">
-      <stop offset="0" stop-color="#e9f5ff"/>
-      <stop offset="0.35" stop-color="#7cc4ff"/>
-      <stop offset="1" stop-color="#2f7dff" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="btnGlass" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="btn" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
       <stop offset="1" stop-color="#ffffff" stop-opacity="0.16"/>
     </linearGradient>
-    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#7cc4ff"/>
-      <stop offset="1" stop-color="#b9a4ff"/>
-    </linearGradient>
-
-    <!-- các đốm màu nằm sau lớp kính -->
-    <g id="blobs">
-      <circle cx="330" cy="300" r="240" fill="#3d6bd8"/>
-      <circle cx="740" cy="340" r="190" fill="#6c63d9"/>
-      <circle cx="470" cy="780" r="220" fill="#2b8fb5"/>
-      <circle cx="780" cy="760" r="170" fill="#3f63c9"/>
-    </g>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+    <filter id="shadow" x="-40%" y="-20%" width="180%" height="150%">
+      <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#000" flood-opacity="0.7"/>
+    </filter>
+    <clipPath id="tile"><rect x="64" y="64" width="896" height="896" rx="200"/></clipPath>
+    <clipPath id="body"><rect x="332" y="148" width="360" height="728" rx="84"/></clipPath>
   </defs>
 
-  <!-- nền -->
+  <!-- nền đen -->
   <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
   <g clip-path="url(#tile)">
-    <use href="#blobs" filter="url(#blurBig)" opacity="0.6"/>
-    <rect x="64" y="64" width="896" height="896" fill="#06101f" opacity="0.18"/>
+    <circle cx="330" cy="260" r="330" fill="url(#glowA)"/>
+    <circle cx="760" cy="840" r="300" fill="url(#glowB)"/>
   </g>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="none" stroke="url(#rim)" stroke-width="4" opacity="0.7"/>
+  <rect x="66" y="66" width="892" height="892" rx="198" fill="none" stroke="url(#rim)" stroke-width="4" opacity="0.7"/>
 
-  <!-- sóng tín hiệu kính -->
-  <g fill="none" stroke-linecap="round">
-    <path d="M374 222 A188 188 0 0 1 650 222" stroke="url(#arc)" stroke-width="22" opacity="0.95"/>
-    <path d="M322 162 A268 268 0 0 1 702 162" stroke="url(#arc)" stroke-width="18" opacity="0.5"/>
-  </g>
-
-  <!-- thân remote: kính -->
+  <!-- thân remote bằng kính -->
   <g filter="url(#shadow)">
-    <rect x="364" y="250" width="296" height="664" rx="132" fill="#0b1630" fill-opacity="0.35"/>
+    <rect x="332" y="148" width="360" height="728" rx="84" fill="#0b0c0e"/>
   </g>
+  <rect x="332" y="148" width="360" height="728" rx="84" fill="url(#glass)"/>
   <g clip-path="url(#body)">
-    <!-- khúc xạ: nền bị làm mờ và sáng lên bên trong thân -->
-    <g transform="translate(0,0)">
-      <use href="#blobs" filter="url(#blurMed)" opacity="0.5"/>
-      <rect x="364" y="250" width="296" height="664" fill="#cfe2ff" opacity="0.14"/>
-    </g>
-    <rect x="364" y="250" width="296" height="664" fill="url(#glassFill)"/>
-    <!-- vệt sáng phản chiếu phía trên -->
-    <ellipse cx="512" cy="300" rx="150" ry="70" fill="url(#spec)" opacity="0.5" filter="url(#blurSm)"/>
-    <!-- bóng nhẹ cạnh dưới -->
-    <rect x="364" y="780" width="296" height="134" fill="#030816" opacity="0.28" filter="url(#blurMed)"/>
+    <ellipse cx="512" cy="120" rx="300" ry="190" fill="url(#spec)" opacity="0.5"/>
   </g>
-  <rect x="364" y="250" width="296" height="664" rx="132" fill="none" stroke="url(#rim)" stroke-width="5"/>
-  <rect x="372" y="258" width="280" height="648" rx="124" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
+  <rect x="334" y="150" width="356" height="724" rx="82" fill="none" stroke="url(#rim)" stroke-width="4"/>
 
-  <!-- touchpad: lớp kính tối bên trong -->
-  <rect x="400" y="290" width="224" height="256" rx="100" fill="url(#padGlass)"/>
-  <g clip-path="url(#padClip)">
-    <circle cx="512" cy="418" r="120" fill="url(#orb)" opacity="0.95"/>
-    <ellipse cx="512" cy="322" rx="90" ry="26" fill="#ffffff" opacity="0.14" filter="url(#blurSm)"/>
-  </g>
-  <rect x="400" y="290" width="224" height="256" rx="100" fill="none" stroke="url(#rim)" stroke-width="3" opacity="0.8"/>
-  <circle cx="512" cy="418" r="54" fill="none" stroke="#dff1ff" stroke-width="5" opacity="0.8"/>
-  <circle cx="512" cy="418" r="22" fill="#ffffff"/>
+  <!-- touchpad phẳng -->
+  <rect x="372" y="188" width="280" height="300" rx="52" fill="url(#pad)"/>
+  <rect x="372" y="188" width="280" height="300" rx="52" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="2"/>
+  <path d="M392 200 H632" stroke="#ffffff" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
 
-  <!-- nút kính -->
-  <g>
-    <circle cx="452" cy="628" r="38" fill="url(#btnGlass)"/>
-    <circle cx="572" cy="628" r="38" fill="url(#btnGlass)"/>
-    <circle cx="452" cy="738" r="38" fill="url(#btnGlass)"/>
-    <rect x="534" y="700" width="76" height="150" rx="38" fill="url(#btnGlass)"/>
-    <circle cx="452" cy="628" r="37" fill="none" stroke="url(#rim)" stroke-width="2.5"/>
-    <circle cx="572" cy="628" r="37" fill="none" stroke="url(#rim)" stroke-width="2.5"/>
-    <circle cx="452" cy="738" r="37" fill="none" stroke="url(#rim)" stroke-width="2.5"/>
-    <rect x="534" y="700" width="76" height="150" rx="38" fill="none" stroke="url(#rim)" stroke-width="2.5"/>
-  </g>
-  <path d="M441 722 L469 738 L441 754 Z" fill="#ffffff" fill-opacity="0.95"/>
-  <path d="M572 722 v30 M557 737 h30" stroke="#ffffff" stroke-opacity="0.95" stroke-width="8" stroke-linecap="round"/>
-  <path d="M557 812 h30" stroke="#ffffff" stroke-opacity="0.95" stroke-width="8" stroke-linecap="round"/>
+  <!-- nút -->
+  <circle cx="436" cy="568" r="38" fill="url(#btn)"/>
+  <circle cx="588" cy="568" r="38" fill="url(#btn)"/>
+  <circle cx="512" cy="568" r="0"/>
+  <!-- menu: mũi tên quay lại -->
+  <path d="M446 548 L424 568 L446 588" fill="none" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- home: màn hình tv -->
+  <rect x="566" y="552" width="44" height="32" rx="8" fill="none" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="10"/>
+
+  <!-- play/pause -->
+  <circle cx="436" cy="684" r="38" fill="url(#btn)"/>
+  <path d="M424 664 L452 684 L424 704 Z" fill="#0b0c0e" fill-opacity="0.85"/>
+  <!-- siri -->
+  <circle cx="588" cy="684" r="38" fill="url(#btn)"/>
+  <rect x="577" y="662" width="22" height="34" rx="11" fill="#0b0c0e" fill-opacity="0.85"/>
+  <path d="M570 684 a18 18 0 0 0 36 0" fill="none" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- âm lượng -->
+  <rect x="398" y="768" width="228" height="60" rx="30" fill="url(#btn)"/>
+  <path d="M440 798 H478 M559 798 H597 M578 779 V817" stroke="#0b0c0e" stroke-opacity="0.85" stroke-width="10" stroke-linecap="round"/>
 </svg>
