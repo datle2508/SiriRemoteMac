@@ -11,6 +11,7 @@ enum Action {
     case app(String)
     case click
     case scroll(Int32)          // +1 lên, -1 xuống
+    case hscroll(Int32)         // cuộn ngang: +1 sang trái, -1 sang phải
     case command(String, [String])
     case nav(Bool)                  // true = Back, false = Forward (hiệu ứng vuốt như Magic Trackpad)
     case rightClick                 // click chuột phải
@@ -72,7 +73,14 @@ enum Action {
             return keyCodes[name].map { .key($0, flags) }
         case "media": return mediaKeys[arg.lowercased()].map { .media($0) }
         case "app": return .app(arg)
-        case "scroll": return arg == "up" ? .scroll(1) : arg == "down" ? .scroll(-1) : nil
+        case "scroll":
+            switch arg {
+            case "up": return .scroll(1)
+            case "down": return .scroll(-1)
+            case "left": return .hscroll(1)
+            case "right": return .hscroll(-1)
+            default: return nil
+            }
         default: return nil
         }
     }
@@ -129,8 +137,9 @@ enum Action {
             postMouse(.leftMouseDown, at: pos)
             postMouse(.leftMouseUp, at: pos)
         case .scroll(let dir):
-            CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1,
-                    wheel1: dir * 300, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
+            smoothScroll(v: Double(dir) * 420 * scrollSpeed, h: 0)
+        case .hscroll(let dir):
+            smoothScroll(v: 0, h: Double(dir) * 420 * scrollSpeed)
         }
     }
 }
@@ -177,13 +186,19 @@ func sendDockNotification(_ name: String) -> Bool {
     return true
 }
 
-/// Gửi sự kiện "smart magnify" (NSEventTypeSmartMagnify = 32) tới cửa sổ dưới con trỏ, như chạm đúp hai ngón trên trackpad.
-/// Safari, Preview, Chrome… phản hồi bằng cách phóng to/thu nhỏ vào vùng nội dung quanh con trỏ.
+/// Zoom thông minh như chạm đúp hai ngón trên Magic Trackpad: Safari, Preview, Chrome… phóng to vừa khối nội dung
+/// dưới con trỏ (đoạn văn, ảnh…), làm lại lần nữa thì về cũ.
+///
+/// Ở tầng CGEvent không có kiểu 32 (NSEventTypeSmartMagnify chỉ tồn tại trong AppKit — gửi kiểu 32 bị bỏ qua).
+/// Trackpad thật gửi sự kiện cử chỉ (kiểu 29) có loại HID = 22 (kIOHIDEventTypeZoomToggle); AppKit dịch nó thành
+/// NSEventTypeSmartMagnify (đã kiểm chứng: NSEvent(cgEvent:) của sự kiện này có type == .smartMagnify).
 func postSmartMagnify() {
-    guard let type = CGEventType(rawValue: 32), let e = CGEvent(source: nil) else { return }
-    let pos = e.location
-    e.type = type
+    guard let gesture = CGEventType(rawValue: 29), let e = CGEvent(source: nil) else { return }
+    let pos = e.location                       // zoom quanh vị trí con trỏ
+    e.type = gesture
     e.location = pos
     e.flags = []
+    if let f = CGEventField(rawValue: 55) { e.setIntegerValueField(f, value: 29) }     // loại sự kiện CGS: gesture
+    if let f = CGEventField(rawValue: 110) { e.setIntegerValueField(f, value: 22) }    // loại HID: zoom toggle
     e.post(tap: .cghidEventTap)
 }

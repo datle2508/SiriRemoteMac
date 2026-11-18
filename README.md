@@ -46,7 +46,7 @@ App đọc cảm ứng qua framework riêng `MultitouchSupport` của Apple (cá
   - **Chạm rồi kéo:** bật *Chạm nhẹ để click*; chạm một lần rồi đặt ngón xuống lại ngay và kéo để kéo thả (nhả ngón để thả).
   - **Cuộn quán tính:** nhấc ngón sau khi cuộn hai ngón thì trang cuộn tiếp và chậm dần (khóa `scrollmomentum`); chạm lại để dừng. Đây là quán tính do app tự tính, không có hiệu ứng đàn hồi ở cuối trang.
   - Không làm được: Force Click, zoom hai ngón, vuốt 3 ngón (remote không gửi lực nhấn và bề mặt quá nhỏ).
-- **Chỉ vuốt / chạm:** không di chuyển con trỏ; vuốt nhanh 4 hướng (`swipeleft`, `swiperight`, `swipeup`, `swipedown`) và chạm 2 ngón (`twofingertap`) chạy hành động bạn gán.
+- **Chỉ vuốt / chạm:** không di chuyển con trỏ; vuốt nhanh 4 hướng (`swipeleft`, `swiperight`, `swipeup`, `swipedown`) chạm 2 ngón (`twofingertap`), chạm đúp 2 ngón (`twofingerdoubletap`) và chạm đúp 1 ngón (`doubletap`) chạy hành động bạn gán. Khi đã gán `doubletap`, chạm một lần sẽ click chậm 0,3 s (để chờ xem có lần chạm thứ hai) và tạm tắt “chạm rồi giữ để kéo”.
 - Tùy chọn: chạm nhẹ để click, cuộn tự nhiên, tốc độ con trỏ/cuộn. Đổi chế độ nhanh ở menu 🎛 → **Chế độ cảm ứng**.
 
 Khóa trong `~/.siriremote.json`: `touchmode` (`cursor`/`swipe`/`off`), `touchspeed`, `scrollspeed`, `naturalscroll`, `tapclick`, `touchfamily`. Cử chỉ cũng có thể đặt riêng cho từng app.
@@ -103,7 +103,7 @@ File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** 
 | `click` | Click chuột trái (không kết hợp với `+hold`/`+double`) |
 | `sleep`, `displaysleep` | Cho Mac ngủ / tắt màn hình |
 | `zoomtoggle` | Zoom nhanh: lần đầu phóng to 3 mức (⌘=), lần sau về kích thước thật (⌘0); hợp với cử chỉ `twofingerdoubletap` |
-| `smartzoom` (thử nghiệm) | Zoom thông minh (như chạm đúp hai ngón trên Magic Trackpad); gán cho cử chỉ `twofingerdoubletap` |
+| `smartzoom` | Zoom thông minh như chạm đúp hai ngón trên Magic Trackpad (phóng vừa khối nội dung dưới con trỏ, làm lại thì về cũ); gán cho cử chỉ `twofingerdoubletap` |
 | `zoomin`, `zoomout`, `zoomreset` | ⌘+, ⌘−, ⌘0 |
 | `mission` | Mission Control |
 | `expose` | Exposé – cửa sổ của app đang dùng (phím ⌃↓; cần bật trong Cài đặt hệ thống → Bàn phím → Phím tắt → Mission Control) |

@@ -113,6 +113,7 @@ final class Controller {
             if down { learnHandler = nil; DispatchQueue.main.async { h(key) } }
             return
         }
+        if down, remoteEventObserver != nil, let name = buttonNames.first(where: { $0.value == key })?.key { notifyRemoteEvent(name) }
         if debugLog { log("BUTTON \(key) (\(buttonNames.first { $0.value == key }?.key ?? "?")) \(down ? "down" : "up")") }
         let bid = frontBID
         let tap = action(for: key, bundleID: bid)

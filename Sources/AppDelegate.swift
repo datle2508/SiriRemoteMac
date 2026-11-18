@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         touchEngine.start(force: true)
         refresh()
+        if CommandLine.arguments.contains("--settings") { openSettings() }   // mở thẳng cửa sổ cài đặt (tiện khi phát triển)
     }
 
     /// Biểu tượng thanh menu (template, đơn sắc), cùng bố cục với icon app:

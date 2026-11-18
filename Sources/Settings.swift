@@ -5,7 +5,7 @@
 import Cocoa
 import UniformTypeIdentifiers
 
-final class SettingsWindow: NSObject, NSWindowDelegate {
+final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     // MARK: Dữ liệu hiển thị
 
@@ -21,6 +21,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private static let gestureRows: [(String, String)] = [
         ("swipeleft", T("Vuốt trái")), ("swiperight", T("Vuốt phải")), ("swipeup", T("Vuốt lên")),
         ("swipedown", T("Vuốt xuống")), ("twofingertap", T("Chạm 2 ngón")), ("twofingerdoubletap", T("Chạm đúp 2 ngón")),
+        ("doubletap", T("Chạm đúp 1 ngón")),
     ]
     private static let actionGroups: [(String, [(String, String)])] = [
         ("Media", [("media:playpause", T("Phát / Dừng")), ("media:next", T("Bài kế tiếp")), ("media:previous", T("Bài trước")),
@@ -31,8 +32,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   ("key:pageup", "Page Up"), ("key:pagedown", "Page Down"),
                   ("key:cmd+[", "Back (cmd+[)"), ("key:cmd+]", "Forward (cmd+])"),
                   ("nav:back", T("Back (thử nghiệm: hiệu ứng vuốt)")), ("nav:forward", T("Forward (thử nghiệm: hiệu ứng vuốt)"))]),
-        (T("Chuột"), [("click", T("Click chuột")), ("rightclick", T("Click phải")), ("scroll:up", T("Cuộn lên")), ("scroll:down", T("Cuộn xuống"))]),
-        (T("Zoom"), [("zoomtoggle", T("Zoom nhanh (phóng to ↔ về cũ)")), ("smartzoom", T("Zoom thông minh (thử nghiệm)")), ("zoomin", T("Phóng to (⌘+)")),
+        (T("Chuột"), [("click", T("Click chuột")), ("rightclick", T("Click phải")), ("scroll:up", T("Cuộn lên")), ("scroll:down", T("Cuộn xuống")),
+                     ("scroll:left", T("Cuộn ngang ←")), ("scroll:right", T("Cuộn ngang →"))]),
+        (T("Zoom"), [("zoomtoggle", T("Zoom nhanh (phóng to ↔ về cũ)")), ("smartzoom", T("Zoom thông minh (như Magic Trackpad)")), ("zoomin", T("Phóng to (⌘+)")),
                       ("zoomout", T("Thu nhỏ (⌘−)")), ("zoomreset", T("Kích thước thật (⌘0)"))]),
         (T("Hệ thống"), [("mission", "Mission Control"), ("expose", T("Exposé (cửa sổ của app)")), ("screensaver", T("Màn hình chờ")),
                       ("showdesktop", T("Hiện màn hình nền")), ("lockscreen", T("Khóa màn hình")), ("sleep", T("Cho Mac ngủ")), ("displaysleep", T("Tắt màn hình")),
@@ -48,6 +50,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         "key:pageup": "arrow.up.to.line", "key:pagedown": "arrow.down.to.line",
         "key:cmd+[": "chevron.backward", "key:cmd+]": "chevron.forward", "nav:back": "hand.draw", "nav:forward": "hand.draw",
         "click": "cursorarrow.click", "rightclick": "cursorarrow.click.2", "scroll:up": "arrow.up.circle", "scroll:down": "arrow.down.circle",
+        "scroll:left": "arrow.left.circle", "scroll:right": "arrow.right.circle",
         "mission": "rectangle.3.group", "expose": "macwindow.on.rectangle", "screensaver": "photo.tv", "lockscreen": "lock.fill", "showdesktop": "menubar.dock.rectangle",
         "sleep": "moon.zzz.fill", "displaysleep": "display", "toggletouch": "arrow.left.arrow.right",
         "@app": "square.grid.2x2", "@key": "keyboard", "none": "nosign",
@@ -57,7 +60,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         "select": "circle.circle", "up": "arrow.up.circle", "down": "arrow.down.circle", "left": "arrow.left.circle",
         "right": "arrow.right.circle", "back": "chevron.backward", "tv": "tv", "mute": "speaker.slash.fill", "power": "power",
         "swipeleft": "arrow.left", "swiperight": "arrow.right", "swipeup": "arrow.up", "swipedown": "arrow.down",
-        "twofingertap": "hand.tap", "twofingerdoubletap": "hand.tap.fill",
+        "twofingertap": "hand.tap", "twofingerdoubletap": "hand.tap.fill", "doubletap": "hand.tap",
         "smartzoom": "plus.magnifyingglass", "zoomtoggle": "plus.magnifyingglass", "zoomin": "plus.magnifyingglass", "zoomout": "minus.magnifyingglass", "zoomreset": "1.magnifyingglass",
     ]
     private static let allPresets: [(String, String)] = SettingsWindow.actionGroups.flatMap { $0.1 }
@@ -88,7 +91,6 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let profilePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let templatePopup = NSPopUpButton(frame: .zero, pullsDown: true)
     private let removeButton = NSButton(title: T("Xóa app này"), target: nil, action: nil)
-    private let statusLabel = NSTextField(labelWithString: "")
     private let permButton = NSButton(title: T("Cấp quyền…"), target: nil, action: nil)
     private let buttonsHost = NSStackView()
     private let touchHost = NSStackView()
@@ -97,6 +99,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var statusTimer: Timer?
     var onClose: (() -> Void)?
     private let segment = NSSegmentedControl()
+    private let pageHost = NSView()
+    private var currentPage = 0
+
+    // Hình minh hoạ
+    private let permPill = StatusPill(), remotePill = StatusPill(), touchPill = StatusPill()
+    private var remoteView: RemoteIllustrationView?
+    private var rowViews: [String: [HoverRow]] = [:]
+    private var gestureDemos: [String: GestureDemoView] = [:]
+    private var modeTiles: [TouchModeTile] = []
+    private var valueLabels: [String: NSTextField] = [:]
+    private weak var touchDevicePill: StatusPill?
+    private weak var touchTechView: NSView?
+    private var showTouchTech = false
 
     /// "gen1" hoặc "gen23": theo lựa chọn trong tab Nâng cao, hoặc tự nhận từ product ID khi để "auto".
     private var effectiveModel: String {
@@ -115,7 +130,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     // MARK: Khởi tạo
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 720),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 780),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         super.init()
         window.title = "SiriRemoteMac"
@@ -142,13 +157,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let row1 = hstack([iconLabel("app.dashed", T("Áp dụng cho")), profilePopup, addButton, removeButton, spacer, templatePopup])
 
-        // Hàng 2: trạng thái
+        // Đầu trang: biểu tượng app + tên + các nhãn trạng thái
         permButton.title = T("Cấp quyền…")
         permButton.target = self; permButton.action = #selector(openAccessibility)
-        statusLabel.font = .systemFont(ofSize: 12)
-        statusLabel.lineBreakMode = .byTruncatingTail
-        statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let row2 = hstack([statusLabel, permButton])
+        permButton.bezelColor = .systemOrange
+        let appIcon = NSImageView(image: NSApp.applicationIconImage ?? NSImage())
+        appIcon.imageScaling = .scaleProportionallyUpOrDown
+        appIcon.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        appIcon.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        let appTitle = NSTextField(labelWithString: "SiriRemoteMac")
+        appTitle.font = .systemFont(ofSize: 18, weight: .bold)
+        let pills = hstack([permPill, remotePill, touchPill, permButton], spacing: 6)
+        let titleCol = vstack([appTitle, pills], spacing: 4)
+        let row2 = hstack([appIcon, titleCol], spacing: 12)
 
         // Thanh chuyển trang
         segment.segmentCount = 3
@@ -163,7 +184,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         segment.target = self; segment.action = #selector(pageChanged(_:))
 
         // Các trang (mỗi trang một khung cuộn, chỉ hiện một trang)
-        let pageHost = NSView()
+        pageHost.wantsLayer = true
         for h in [buttonsHost, touchHost, advancedHost] {
             let sv = makePage(h)
             sv.translatesAutoresizingMaskIntoConstraints = false
@@ -174,7 +195,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             ])
             pages.append(sv)
         }
-        showPage(0)
+        showPage(0, animated: false)
         pageHost.setContentHuggingPriority(.defaultLow, for: .vertical)
         pageHost.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
@@ -188,7 +209,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             segment.topAnchor.constraint(equalTo: segRow.topAnchor),
             segment.bottomAnchor.constraint(equalTo: segRow.bottomAnchor),
         ])
-        let root = NSStackView(views: [row1, row2, segRow, pageHost, footer])
+        let root = NSStackView(views: [row2, row1, segRow, pageHost, footer])
+        root.setCustomSpacing(16, after: row2)
         root.orientation = .vertical; root.alignment = .leading; root.spacing = 12; root.distribution = .fill
         root.translatesAutoresizingMaskIntoConstraints = false
         for v in [row1, row2, segRow, pageHost, footer] { v.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true }
@@ -213,9 +235,39 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // Trạng thái quyền / remote / cảm ứng có thể đổi bất cứ lúc nào: cập nhật định kỳ khi cửa sổ đang mở
         statusTimer?.invalidate()
         statusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in self?.updateStatus() }
+        // Nút / cử chỉ thật trên remote → sáng trên hình minh hoạ
+        remoteEventObserver = { [weak self] name in self?.remoteEvent(name) }
+        window.contentView?.staggerIn([currentHost])
+    }
+
+    private var currentHost: NSStackView { [buttonsHost, touchHost, advancedHost][currentPage] }
+
+    private func remoteEvent(_ name: String) {
+        remoteView?.pulse(name)
+        gestureDemos[name]?.flash()
+        for row in rowViews[name] ?? [] { flashRow(row) }
+    }
+
+    private func flashRow(_ row: HoverRow) {
+        row.isLit = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak row, weak self] in
+            guard let row = row else { return }
+            row.isLit = self?.hoverName == row.name
+        }
+    }
+
+    private var hoverName: String?
+
+    /// Rê chuột lên hàng hoặc lên nút trên hình: sáng cả hai.
+    private func setHover(_ name: String?) {
+        hoverName = name
+        remoteView?.highlight(name)
+        for (n, rows) in rowViews { for r in rows { r.isLit = n == name } }
+        for (n, demo) in gestureDemos { demo.setLooping(n == name) }
     }
 
     func windowWillClose(_ notification: Notification) {
+        remoteEventObserver = nil
         statusTimer?.invalidate()
         statusTimer = nil
         onClose?()                      // AppDelegate giải phóng cửa sổ để không giữ RAM khi không dùng
@@ -226,27 +278,45 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         statusTimer?.invalidate()
     }
 
-    @objc private func pageChanged(_ sender: NSSegmentedControl) { showPage(sender.selectedSegment) }
+    @objc private func pageChanged(_ sender: NSSegmentedControl) { showPage(sender.selectedSegment, animated: true) }
 
-    private func showPage(_ i: Int) {
+    /// Đổi trang: trượt sang trái / phải theo thứ tự tab, các thẻ hiện ra lần lượt.
+    private func showPage(_ i: Int, animated: Bool) {
+        let old = currentPage
+        currentPage = i
+        if animated, i != old, !reduceMotion, let l = pageHost.layer {
+            let t = CATransition()
+            t.type = .push
+            t.subtype = i > old ? .fromRight : .fromLeft
+            t.duration = 0.32
+            t.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.9, 0.3, 1)
+            l.add(t, forKey: "page")
+        }
         for (n, p) in pages.enumerated() { p.isHidden = n != i }
+        if animated { pages[i].contentView.scroll(to: .zero) }
     }
 
     // MARK: Hàm dựng giao diện dùng chung
 
+    /// Ảnh SF Symbol dùng chung (bộ nhớ đệm): hàng nghìn mục menu chỉ giữ vài chục ảnh thay vì mỗi mục một ảnh.
+    private static var symbolCache: [String: NSImage] = [:]
+
     private func symbol(_ name: String?, size: CGFloat = 13) -> NSImage? {
         guard let name = name else { return nil }
-        return NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+        let key = "\(name)|\(size)"
+        if let img = SettingsWindow.symbolCache[key] { return img }
+        let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .regular))
+        SettingsWindow.symbolCache[key] = img
+        return img
     }
 
     /// Nhãn có biểu tượng đứng trước.
-    private func iconLabel(_ sym: String?, _ text: String, bold: Bool = false) -> NSView {
+    private func iconLabel(_ sym: String?, _ text: String) -> NSView {
         let l = NSTextField(labelWithString: text)
-        if bold { l.font = .boldSystemFont(ofSize: 13) }
-        guard let img = symbol(sym, size: bold ? 14 : 13) else { return l }
+        guard let img = symbol(sym) else { return l }
         let iv = NSImageView(image: img)
-        iv.contentTintColor = bold ? .controlAccentColor : .secondaryLabelColor
+        iv.contentTintColor = .secondaryLabelColor
         iv.widthAnchor.constraint(equalToConstant: 20).isActive = true
         return hstack([iv, l], spacing: 6)
     }
@@ -284,7 +354,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         box.cornerRadius = 10; box.borderWidth = 1
         box.borderColor = .separatorColor; box.fillColor = .controlBackgroundColor
         box.contentViewMargins = .zero
-        let stack = vstack([iconLabel(sym, title, bold: true)] + views, spacing: 10)
+        let stack = vstack([cardTitle(sym, title)] + views, spacing: 10)
         stack.translatesAutoresizingMaskIntoConstraints = false
         box.contentView?.addSubview(stack)
         if let cv = box.contentView {
@@ -296,6 +366,28 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             ])
         }
         return box
+    }
+
+    /// Tiêu đề thẻ: biểu tượng trong ô vuông bo góc màu nhấn + chữ đậm.
+    private func cardTitle(_ sym: String, _ title: String) -> NSView {
+        let l = NSTextField(labelWithString: title)
+        l.font = .systemFont(ofSize: 13, weight: .semibold)
+        let chip = NSView()
+        chip.wantsLayer = true
+        chip.layer?.cornerRadius = 6
+        chip.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
+        chip.translatesAutoresizingMaskIntoConstraints = false
+        chip.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        chip.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        if let img = symbol(sym, size: 12) {
+            let iv = NSImageView(image: img)
+            iv.contentTintColor = .controlAccentColor
+            iv.translatesAutoresizingMaskIntoConstraints = false
+            chip.addSubview(iv)
+            iv.centerXAnchor.constraint(equalTo: chip.centerXAnchor).isActive = true
+            iv.centerYAnchor.constraint(equalTo: chip.centerYAnchor).isActive = true
+        }
+        return hstack([chip, l], spacing: 8)
     }
 
     /// Thêm thẻ vào trang, rộng bằng trang.
@@ -361,7 +453,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let s = NSSlider(value: Double(cfg.global[id] ?? "") ?? def, minValue: lo, maxValue: hi,
                          target: self, action: #selector(sliderChanged(_:)))
         s.identifier = NSUserInterfaceItemIdentifier(id)
-        s.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        s.isContinuous = true
+        s.widthAnchor.constraint(equalToConstant: 260).isActive = true
         return s
     }
 
@@ -403,12 +496,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
         removeButton.isEnabled = current != nil
         rebuild()
+        if window.isVisible { window.contentView?.staggerIn(currentHost.arrangedSubviews) }
     }
 
     private func rebuild() {
         for h in [buttonsHost, touchHost, advancedHost] {
             for v in h.arrangedSubviews { h.removeArrangedSubview(v); v.removeFromSuperview() }
         }
+        rowViews = [:]; gestureDemos = [:]; modeTiles = []; valueLabels = [:]; remoteView = nil
         updateStatus()
         buildButtonsTab()
         buildTouchTab()
@@ -417,44 +512,89 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     func updateStatus() {
         let trusted = AXIsProcessTrusted()
-        func dot(_ ok: Bool, _ text: String) -> NSAttributedString {
-            let r = NSMutableAttributedString(string: "● ", attributes: [.foregroundColor: ok ? NSColor.systemGreen : NSColor.systemOrange])
-            r.append(NSAttributedString(string: text, attributes: [.foregroundColor: NSColor.secondaryLabelColor]))
-            return r
+        permPill.set(ok: trusted, text: trusted ? T("Đã cấp quyền") : T("Thiếu quyền Accessibility"))
+        remotePill.set(ok: controller.isConnected, text: controller.isConnected ? T("Remote đã kết nối") : T("Remote chưa kết nối"))
+        touchPill.set(ok: touchMode != .off, text: T("Cảm ứng: ") + touchMode.title)
+        if permButton.isHidden != trusted {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.25; ctx.allowsImplicitAnimation = true
+                permButton.isHidden = trusted
+                permButton.superview?.layoutSubtreeIfNeeded()
+            }
         }
-        let all = NSMutableAttributedString()
-        all.append(dot(trusted, trusted ? T("Đã cấp quyền") : T("Thiếu quyền Accessibility")))
-        all.append(NSAttributedString(string: "     "))
-        all.append(dot(controller.isConnected, controller.isConnected ? T("Remote đã kết nối") : T("Remote chưa kết nối")))
-        all.append(NSAttributedString(string: "     "))
-        all.append(dot(touchMode != .off, T("Cảm ứng: ") + touchMode.title))
-        statusLabel.attributedStringValue = all
-        permButton.isHidden = trusted
+        updateTouchDeviceStatus()
+        for t in modeTiles { t.isSelected = t.modeID == (cfg.global["touchmode"] ?? "cursor") }
     }
 
-    private func rowLabel(_ name: String, _ text: String) -> NSView { iconLabel(SettingsWindow.icons[name], text) }
+    private func rowLabel(_ name: String, _ text: String, gesture: Bool) -> NSView {
+        let content: NSView
+        if gesture {
+            let demo = GestureDemoView(gesture: name)
+            gestureDemos[name] = demo
+            content = hstack([demo, NSTextField(labelWithString: text)], spacing: 8)
+        } else {
+            content = iconLabel(SettingsWindow.icons[name], text)
+        }
+        let row = HoverRow(name: name, content: content)
+        row.onHover = { [weak self] n in self?.setHover(n) }
+        rowViews[name, default: []].append(row)
+        return row
+    }
 
-    private func makeGrid(columns: [(String, String)], rows: [(String, String)], popupWidth: CGFloat = 155) -> NSGridView {
+    private func makeGrid(columns: [(String, String)], rows: [(String, String)], popupWidth: CGFloat = 155,
+                          gesture: Bool = false) -> NSGridView {
         var data: [[NSView]] = [[NSView()] + columns.map { caption($0.0) as NSView }]
         for (name, text) in rows {
-            data.append([rowLabel(name, text)] + columns.map { makePopup(name + $0.1, width: popupWidth) as NSView })
+            data.append([rowLabel(name, text, gesture: gesture)] + columns.map { makePopup(name + $0.1, width: popupWidth) as NSView })
         }
         let g = NSGridView(views: data)
-        g.columnSpacing = 12; g.rowSpacing = 8
-        g.column(at: 0).width = 150
+        g.columnSpacing = 12; g.rowSpacing = 6
+        g.column(at: 0).width = gesture ? 200 : 160
         g.yPlacement = .center
         return g
     }
 
     private func buildButtonsTab() {
-        add(card(T("Phím trên remote"), "av.remote", [makeGrid(columns: [(T("Bấm"), ""), (T("Giữ"), "+hold"), (T("Nhấn đúp"), "+double")],
-                                                            rows: buttonRows)]), to: buttonsHost)
+        let remote = RemoteIllustrationView()
+        remote.model = effectiveModel == "gen23" ? .gen23 : .gen1
+        remote.onHover = { [weak self] n in self?.setHover(n) }
+        remote.translatesAutoresizingMaskIntoConstraints = false
+        remote.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        remote.heightAnchor.constraint(equalToConstant: 410).isActive = true
+        remoteView = remote
+        let hint = note(T("Rê chuột lên nút trên hình hoặc bấm nút thật trên remote để thấy hàng tương ứng."))
+        hint.preferredMaxLayoutWidth = 150
+        hint.alignment = .center
+        let left = vstack([remote, hint], spacing: 4)
+        left.alignment = .centerX
+        left.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        let grid = makeGrid(columns: [(T("Bấm"), ""), (T("Giữ"), "+hold"), (T("Nhấn đúp"), "+double")], rows: buttonRows, popupWidth: 150)
+        // Bảng giữ chiều cao tự nhiên, nằm sát trên (không bị kéo giãn theo chiều cao hình remote)
+        grid.setContentHuggingPriority(.required, for: .vertical)
+        grid.setContentCompressionResistancePriority(.required, for: .vertical)
+        let gridCol = NSStackView(views: [grid])
+        gridCol.orientation = .vertical; gridCol.alignment = .leading
+        gridCol.setHuggingPriority(.defaultLow, for: .vertical)
+        let content = NSStackView(views: [left, gridCol])
+        content.orientation = .horizontal; content.alignment = .top; content.spacing = 18
+        add(card(T("Phím trên remote"), "av.remote", [content]), to: buttonsHost)
+    }
+
+    /// Chữ hiện cạnh thanh trượt: độ mượt hiện theo phần trăm, còn lại là số.
+    private func valueText(_ id: String, _ v: Double) -> String {
+        id == "scrollsmooth" ? "\(Int((v * 100).rounded()))%" : String(format: "%.2f", v)
     }
 
     private func sliderRow(_ title: String, _ id: String, _ lo: Double, _ hi: Double, _ def: Double) -> NSView {
         let t = NSTextField(labelWithString: title)
         t.widthAnchor.constraint(equalToConstant: 120).isActive = true
-        return hstack([t, slider(id, lo, hi, def)], spacing: 10)
+        let s = slider(id, lo, hi, def)
+        let v = NSTextField(labelWithString: valueText(id, s.doubleValue))
+        v.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        v.textColor = .secondaryLabelColor
+        v.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        valueLabels[id] = v
+        return hstack([t, s, v], spacing: 10)
     }
 
     private func buildTouchTab() {
@@ -465,30 +605,35 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 ("off", T("Tắt"), "nosign", T("Bỏ qua touchpad.")),
             ]
             let cur = cfg.global["touchmode"] ?? "cursor"
-            var modeViews: [NSView] = []
-            for (id, title, sym, desc) in modes {
-                let b = NSButton(radioButtonWithTitle: title, target: self, action: #selector(touchModeChanged(_:)))
-                b.identifier = NSUserInterfaceItemIdentifier(id)
-                b.state = id == cur ? .on : .off
-                let indent = NSView(); indent.widthAnchor.constraint(equalToConstant: 22).isActive = true
-                modeViews.append(vstack([hstack([b, iconLabel(sym, "")]), hstack([indent, note(desc)])], spacing: 2))
+            let tiles: [TouchModeTile] = modes.map { (id, title, sym, desc) in
+                let t = TouchModeTile(mode: id, title: title, detail: desc, symbol: sym)
+                t.isSelected = id == cur
+                t.onSelect = { [weak self] m in self?.selectTouchMode(m) }
+                return t
             }
-            modeViews.append(note(T("Mẹo: giữ nút Siri để đổi nhanh giữa các chế độ.")))
-            add(card(T("Chế độ cảm ứng"), "hand.point.up.left", modeViews), to: touchHost)
+            modeTiles = tiles
+            let tileRow = NSStackView(views: tiles)
+            tileRow.orientation = .horizontal; tileRow.distribution = .fillEqually; tileRow.spacing = 10; tileRow.alignment = .top
+            for t in tiles { t.heightAnchor.constraint(equalToConstant: 168).isActive = true }
+            let modeCard = card(T("Chế độ cảm ứng"), "hand.point.up.left", [tileRow, note(T("Mẹo: giữ nút Siri để đổi nhanh giữa các chế độ."))])
+            tileRow.widthAnchor.constraint(equalTo: modeCard.widthAnchor, constant: -28).isActive = true
+            add(modeCard, to: touchHost)
 
             add(card(T("Độ nhạy"), "dial.medium", [
                 sliderRow(T("Tốc độ con trỏ"), "touchspeed", 0.3, 4, 1.5),
                 sliderRow(T("Tốc độ cuộn"), "scrollspeed", 0.2, 3, 1.0),
+                sliderRow(T("Độ mượt khi cuộn"), "scrollsmooth", 0, 1, 0.55),
+                note(T("Độ mượt: thấp = trang bám sát ngón tay nhưng có thể giật theo nhịp Bluetooth; cao = trang trôi đều hơn nhưng chạy sau ngón một chút.")),
             ]), to: touchHost)
 
             add(card(T("Cảm giác như Magic Trackpad"), "wand.and.stars", [
-                checkbox("naturalscroll", T("Cuộn tự nhiên (đảo chiều)"), "1"),
+                checkbox("naturalscroll", T("Cuộn tự nhiên (đảo chiều, áp dụng cả cho vuốt gán Cuộn)"), "1"),
                 checkbox("scrollmomentum", T("Cuộn có quán tính (tiếp tục cuộn sau khi nhấc tay)"), "1"),
                 checkbox("tapclick", T("Chạm nhẹ để click (chạm rồi đặt ngón xuống = kéo thả)"), "0"),
                 checkbox("clicksteady", T("Giữ yên con trỏ khi nhấn touchpad để click"), "1"),
             ]), to: touchHost)
         }
-        add(card(T("Cử chỉ"), "hand.draw", [makeGrid(columns: [(T("Hành động"), "")], rows: SettingsWindow.gestureRows, popupWidth: 230)]), to: touchHost)
+        add(card(T("Cử chỉ"), "hand.draw", [makeGrid(columns: [(T("Hành động"), "")], rows: SettingsWindow.gestureRows, popupWidth: 260, gesture: true)]), to: touchHost)
     }
 
     private func buildAdvancedTab() {
@@ -515,10 +660,28 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                     NSTextField(labelWithString: T("      Nhấn đúp (giây)")), textField("doubletime", "0.3", width: 56)], spacing: 8),
         ]), to: advancedHost)
 
-        add(card(T("Mã cảm ứng (family)"), "number", [
-            textField("touchfamily", "160,145", width: 140),
+        // Touchpad của remote: trạng thái dễ hiểu; mã thiết bị (family) giấu trong "Tuỳ chọn kỹ thuật"
+        let pill = StatusPill()
+        touchDevicePill = pill
+        let tech = vstack([
+            hstack([NSTextField(labelWithString: T("Mã thiết bị cảm ứng")), textField("touchfamily", "160,145", width: 140)], spacing: 8),
             note(T("Đời 1 = 160, đời 3 = 145 (luôn được thử). Với đời khác: bật “Ghi log nút bấm” (menu → Nâng cao), nối lại remote, xem dòng `family` trong log và thêm vào đây, cách nhau bằng dấu phẩy.")),
+        ], spacing: 6)
+        tech.isHidden = !showTouchTech
+        let disclose = NSButton(title: "", target: self, action: #selector(toggleTouchTech(_:)))
+        disclose.bezelStyle = .disclosure
+        disclose.setButtonType(.pushOnPushOff)
+        disclose.state = showTouchTech ? .on : .off
+        let discloseLabel = NSTextField(labelWithString: T("Tuỳ chọn kỹ thuật"))
+        discloseLabel.textColor = .secondaryLabelColor
+        touchTechView = tech
+        add(card(T("Touchpad của remote"), "hand.point.up.left", [
+            pill,
+            note(T("Thường không cần chỉnh gì: app tự nhận touchpad của Siri Remote đời 1 và đời 3.")),
+            hstack([disclose, discloseLabel], spacing: 4),
+            tech,
         ]), to: advancedHost)
+        updateTouchDeviceStatus()
 
         var learnViews: [NSView] = [
             NSButton(title: T("Học nút mới…"), target: self, action: #selector(learnButton)),
@@ -539,47 +702,104 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ]), to: advancedHost)
     }
 
+    private func updateTouchDeviceStatus() {
+        guard let pill = touchDevicePill else { return }
+        if touchMode == .off {
+            pill.set(ok: false, text: T("Cảm ứng đang tắt — bật lại ở tab Cảm ứng"))
+        } else if touchEngine.isRunning {
+            pill.set(ok: true, text: T("Đang nhận cảm ứng từ remote"))
+        } else if !controller.isConnected {
+            pill.set(ok: false, text: T("Chưa thấy remote — hãy kết nối qua Bluetooth"))
+        } else {
+            pill.set(ok: false, text: T("Remote đã kết nối nhưng chưa nhận được touchpad — thử tắt/bật remote"))
+        }
+    }
+
+    @objc private func toggleTouchTech(_ sender: NSButton) {
+        showTouchTech = sender.state == .on
+        guard let v = touchTechView else { return }
+        if showTouchTech && !reduceMotion {
+            v.isHidden = false
+            v.superview?.staggerIn([v])
+        } else {
+            v.isHidden = !showTouchTech
+        }
+    }
+
     // MARK: Ô chọn hành động
 
+    /// Menu của ô chọn hành động, dựng đầy đủ khi người dùng mở ra lần đầu (xem menuNeedsUpdate).
+    private final class ActionMenu: NSMenu {
+        var key = ""
+        var built = false
+        weak var popup: NSPopUpButton?
+    }
+
+    /// Hành động hiện tại của một khóa trong hồ sơ đang chọn (nil = dùng mặc định).
+    private func currentSpec(_ key: String) -> String? {
+        current == nil ? (cfg.global[key] ?? "none") : cfg.apps[current!]?[key]
+    }
+
+    private func actionItem(_ title: String, _ rep: String?) -> NSMenuItem {   // rep = nil: tiêu đề nhóm
+        let mi = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        mi.representedObject = rep
+        mi.isEnabled = rep != nil
+        if let rep = rep {
+            mi.image = symbol(rep == "@inherit" ? "arrow.uturn.backward" : SettingsWindow.icons[rep], size: 12)
+        }
+        return mi
+    }
+
+    /// Ô chọn hành động. Ban đầu chỉ chứa đúng mục đang chọn; danh sách đầy đủ (~45 mục) dựng khi mở ra.
+    /// (Trên macOS mới mỗi mục menu tốn khá nhiều bộ nhớ: dựng sẵn cho ~55 ô chọn từng chiếm ~100 MB.)
     private func makePopup(_ key: String, width: CGFloat = 155) -> NSPopUpButton {
         let p = NSPopUpButton(frame: .zero, pullsDown: false)
-        p.menu?.autoenablesItems = false
+        let menu = ActionMenu()
+        menu.key = key
+        menu.popup = p
+        menu.delegate = self
+        menu.autoenablesItems = false
+        p.menu = menu
         p.identifier = NSUserInterfaceItemIdentifier(key)
         p.target = self; p.action = #selector(actionChanged(_:))
         p.widthAnchor.constraint(equalToConstant: width).isActive = true
 
-        func add(_ title: String, _ rep: String?) {      // rep = nil: tiêu đề nhóm, không chọn được
-            let mi = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            mi.representedObject = rep
-            mi.isEnabled = rep != nil
-            if let rep = rep { mi.image = symbol(SettingsWindow.icons[rep], size: 12) }
-            p.menu?.addItem(mi)
-        }
-        if current != nil { add(T("↩ Mặc định: ") + label(for: cfg.global[key]), "@inherit"); p.menu?.items.last?.image = symbol("arrow.uturn.backward", size: 12) }
-        add(T("Không làm gì"), "none")
-        for (group, items) in SettingsWindow.actionGroups {
-            p.menu?.addItem(.separator())
-            add(group.uppercased(), nil)
-            for (spec, title) in items { add(title, spec) }
-        }
-        p.menu?.addItem(.separator())
-        add(T("Mở ứng dụng…"), "@app")
-        add(T("Phím tắt…"), "@key")
-
-        let cur: String? = current == nil ? (cfg.global[key] ?? "none") : cfg.apps[current!]?[key]
+        let cur = currentSpec(key)
+        let title: String
         if let cur = cur {
-            if let i = p.itemArray.firstIndex(where: { ($0.representedObject as? String) == cur }) {
-                p.selectItem(at: i)
-            } else {
-                let mi = NSMenuItem(title: label(for: cur), action: nil, keyEquivalent: "")
-                mi.representedObject = cur
-                p.menu?.insertItem(mi, at: current != nil ? 1 : 0)
-                p.select(mi)
-            }
+            title = SettingsWindow.allPresets.first(where: { $0.0 == cur })?.1 ?? (cur == "none" ? T("Không làm gì") : label(for: cur))
         } else {
-            p.selectItem(at: 0)     // “↩ Mặc định”
+            title = T("↩ Mặc định: ") + label(for: cfg.global[key])
         }
+        menu.addItem(actionItem(title, cur ?? "@inherit"))
+        p.selectItem(at: 0)
         return p
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard let m = menu as? ActionMenu, !m.built, let p = m.popup else { return }
+        m.built = true
+        m.removeAllItems()
+        let key = m.key
+        if current != nil { m.addItem(actionItem(T("↩ Mặc định: ") + label(for: cfg.global[key]), "@inherit")) }
+        m.addItem(actionItem(T("Không làm gì"), "none"))
+        for (group, items) in SettingsWindow.actionGroups {
+            m.addItem(.separator())
+            m.addItem(actionItem(group.uppercased(), nil))
+            for (spec, title) in items { m.addItem(actionItem(title, spec)) }
+        }
+        m.addItem(.separator())
+        m.addItem(actionItem(T("Mở ứng dụng…"), "@app"))
+        m.addItem(actionItem(T("Phím tắt…"), "@key"))
+
+        let cur = currentSpec(key) ?? "@inherit"
+        if let i = p.itemArray.firstIndex(where: { ($0.representedObject as? String) == cur }) {
+            p.selectItem(at: i)
+        } else {                                        // phím tắt / mở app riêng: thêm mục cho nó
+            let mi = actionItem(label(for: cur), cur)
+            m.insertItem(mi, at: current != nil ? 1 : 0)
+            p.select(mi)
+        }
     }
 
     // MARK: Thao tác
@@ -615,7 +835,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         } else if let v = value {
             if v == "none" && defaultMap[key] == nil { cfg.global[key] = nil } else { cfg.global[key] = v }
         }
-        commit()
+        // Ô chọn đã tự hiện lựa chọn mới: chỉ dựng lại khi cần thêm mục riêng (mở app… / phím tắt…)
+        commit(rebuild: rep.hasPrefix("@") && rep != "@inherit")
     }
 
     @objc private func applyTemplate(_ sender: NSMenuItem) {
@@ -633,10 +854,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         commit()
     }
 
-    @objc private func touchModeChanged(_ sender: NSButton) {
-        guard let id = sender.identifier?.rawValue else { return }
+    /// Chọn chế độ bằng thẻ: chỉ đổi trạng thái thẻ (có animation), không dựng lại cả trang.
+    private func selectTouchMode(_ id: String) {
         cfg.global["touchmode"] = id
-        commit()
+        for t in modeTiles { t.isSelected = t.modeID == id }
+        commit(rebuild: false)
+        updateStatus()
+        appDelegate.refresh()
     }
 
     @objc private func languageChanged(_ sender: NSPopUpButton) {
@@ -671,6 +895,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func sliderChanged(_ sender: NSSlider) {
         guard let id = sender.identifier?.rawValue else { return }
         cfg.global[id] = String(format: "%.2f", sender.doubleValue)
+        valueLabels[id]?.stringValue = valueText(id, sender.doubleValue)
+        // Kéo liên tục: chỉ ghi file khi thả chuột cho đỡ tốn
+        if NSApp.currentEvent?.type == .leftMouseDragged { return }
         commit(rebuild: false)
     }
 
@@ -682,8 +909,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let range = id == "holdtime" ? 0.2...3.0 : 0.15...1.0
             guard let v = Double(sender.stringValue.replacingOccurrences(of: ",", with: ".")) else { commit(); return }
             cfg.global[id] = String(format: "%.2f", min(max(v, range.lowerBound), range.upperBound))
+            sender.stringValue = cfg.global[id] ?? sender.stringValue
         }
-        commit()
+        commit(rebuild: false)
     }
 
     @objc private func openAccessibility() {

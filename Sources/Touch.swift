@@ -67,7 +67,7 @@ func navSwipe(back: Bool) {
 
     navTimer?.cancel()
     var idx = 0
-    let timer = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive))
+    let timer = DispatchSource.makeTimerSource(flags: .strict, queue: navQueue)
     timer.schedule(deadline: .now(), repeating: .microseconds(16667), leeway: .microseconds(300))
     timer.setEventHandler {
         // mỗi nhịp gửi đúng 1 khung (không dồn); nếu trễ quá 2 khung thì gộp delta để không mất quãng
@@ -81,6 +81,9 @@ func navSwipe(back: Bool) {
 }
 
 private var navTimer: DispatchSourceTimer?
+private let navQueue = DispatchQueue(label: "siriremote.navswipe", qos: .userInteractive)
+/// Cuộn mượt một quãng (điểm ảnh) như cú hất nhanh hai ngón trên trackpad, thay cho một bước nhảy cứng.
+func smoothScroll(v: Double, h: Double) { ScrollPump.shared.fling(h, v) }
 
 /// Gửi một sự kiện cuộn "như trackpad": liên tục (pixel) kèm pha cuộn (1 bắt đầu, 2 đang cuộn, 4 nhấc tay, 128 mayBegin)
 /// hoặc pha quán tính (1 bắt đầu, 2 tiếp tục, 3 kết thúc). Cấu trúc theo bản ghi ScrollSniffer của trackpad thật.
@@ -169,8 +172,6 @@ final class TouchEngine {
     private var lastCount = 0
     private var maxFingers = 0
     private var travel: Float = 0
-    private var scrollRemX: Float = 0
-    private var scrollRemY: Float = 0
     private var cursorDecided = false       // false: đang giữ con trỏ đứng yên, chờ xem có phải cú vuốt không
     private var bufX: Float = 0
     private var bufY: Float = 0
@@ -183,13 +184,7 @@ final class TouchEngine {
     private var lastTapEnd = -10.0
     private var tapDragging = false
     // Cuộn có quán tính
-    private var scrollSamples: [(t: Double, x: Float, y: Float)] = []
     private var didScroll = false
-    private var inertiaTimer: Timer?
-    private var inertiaActive = false
-    private var scrollStarted = false
-    private var smoothX: Float = 0
-    private var smoothY: Float = 0
 
     var isRunning: Bool { !devices.isEmpty }
 
@@ -233,8 +228,7 @@ final class TouchEngine {
         devices.removeAll()
         deviceList = nil
         runningMode = .off
-        stopInertia()
-        if scrollStarted { scrollStarted = false; postScroll(v: 0, h: 0, phase: 4) }
+        ScrollPump.shared.stop()
         if tapDragging { tapDragging = false; mouseButtonDown = false; postMouse(.leftMouseUp, at: currentPos(), clickState: 2) }
         inSession = false
         lastCount = 0
@@ -257,10 +251,11 @@ final class TouchEngine {
             inSession = true
             startTime = timestamp; startCentroid = c; lastCentroid = c
             maxFingers = active.count; lastCount = active.count; travel = 0
-            scrollRemX = 0; scrollRemY = 0
             cursorDecided = false; bufX = 0; bufY = 0
-            didScroll = false; scrollSamples.removeAll(); smoothX = 0; smoothY = 0
-            stopInertia()                                   // chạm vào là dừng cuộn quán tính
+            didScroll = false
+            pressedInSession = mouseButtonDown
+            scrollAxis = .undecided; axisBufX = 0; axisBufY = 0; scrollVel = 0
+            ScrollPump.shared.stop()                        // chạm vào là dừng cuộn quán tính
             if tapClick, touchMode == .cursor, active.count == 1, timestamp - lastTapEnd < 0.3 {
                 tapDragging = true                          // chạm rồi đặt ngón xuống ngay: giữ chuột để kéo
                 cursorDecided = true
@@ -270,6 +265,7 @@ final class TouchEngine {
             return
         }
         maxFingers = max(maxFingers, active.count)
+        if mouseButtonDown { pressedInSession = true }
         if active.count != lastCount {      // tránh nhảy khi đổi số ngón
             lastCentroid = c; lastCount = active.count
             if active.count > 1 { cursorDecided = true; bufX = 0; bufY = 0 }
@@ -318,7 +314,7 @@ final class TouchEngine {
         }
         if didScroll {                                      // vừa cuộn hai ngón: tiếp tục cuộn giảm dần
             didScroll = false
-            finishScroll(endTime: ts)
+            finishScroll()
             return
         }
         if fingers == 1 {
@@ -327,13 +323,13 @@ final class TouchEngine {
             let adx = abs(dx), ady = abs(dy)
             if dur < maxTime, max(adx, ady) >= minDist, max(adx, ady) >= 2 * min(adx, ady) {
                 let key = adx > ady ? (dx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (dy > 0 ? "SWIPEUP" : "SWIPEDOWN")
-                fire(key)
+                // tốc độ vuốt (đơn vị chuẩn hoá / giây): vuốt nhanh thì cuộn xa hơn, như trackpad
+                fire(key, speed: Double(max(adx, ady)) / max(dur, 0.03))
                 return
             }
             if travel >= 0.04, touchMode == .cursor, !cursorDecided { moveCursor(bufX, bufY, dt: dur) }   // không phải vuốt: trả lại chuyển động đã giữ
-            else if tapClick, dur < 0.25, travel < 0.04 {
-                click()
-                if touchMode == .cursor { lastTapEnd = ts }
+            else if dur < 0.25, travel < 0.04, !pressedInSession {
+                oneFingerTap(at: ts)
             }
         } else if fingers == 2, dur < 0.25, travel < 0.06 {
             twoFingerTap(at: ts)
@@ -344,6 +340,35 @@ final class TouchEngine {
 
     /// Chạm 2 ngón: nếu có gán "chạm đúp 2 ngón" thì chờ 0,3 s xem có lần chạm thứ hai không (đúp → zoom thông minh…);
     /// không có lần hai thì chạy hành động chạm đơn như bình thường.
+    private var pendingTap: DispatchWorkItem?
+    private var lastOneTap = -10.0
+    private var pressedInSession = false        // đã bấm lún touchpad trong lượt chạm này (không tính là chạm nhẹ)
+
+    /// Chạm nhẹ một ngón. Nếu có gán "chạm đúp 1 ngón" thì chờ 0,3 s xem có lần chạm thứ hai:
+    /// có → chạy hành động chạm đúp (không click); không → click như bình thường (nếu bật Chạm nhẹ để click).
+    /// Khi đã gán chạm đúp, "chạm rồi giữ để kéo" tạm tắt để hai lần chạm không thành kéo thả.
+    private func oneFingerTap(at ts: Double) {
+        guard controller.action(for: "DOUBLETAP") != nil else {
+            if tapClick {
+                click()
+                if touchMode == .cursor { lastTapEnd = ts }
+            }
+            return
+        }
+        if let p = pendingTap, ts - lastOneTap < 0.4 {
+            p.cancel(); pendingTap = nil
+            fire("DOUBLETAP")
+            return
+        }
+        lastOneTap = ts
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingTap = nil
+            if tapClick { self?.click() }
+        }
+        pendingTap = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
     private var pendingTwoTap: DispatchWorkItem?
     private var lastTwoTap = -10.0
 
@@ -363,15 +388,28 @@ final class TouchEngine {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
-    private func fire(_ key: String) {
+    private func fire(_ key: String, speed: Double? = nil) {
+        notifyRemoteEvent(key.lowercased())
+        if debugLog { log("CỬ CHỈ \(key) → \(controller.action(for: key).map { "\($0)" } ?? "không gán")") }
         guard let a = controller.action(for: key) else { return }
+        // Vuốt gán cuộn: theo "Cuộn tự nhiên" giống cuộn hai ngón (bật = nội dung đi theo ngón tay,
+        // vuốt lên → trang cuộn xuống). Nút bấm trên remote không bị ảnh hưởng.
+        let flip = key.hasPrefix("SWIPE") && naturalScroll
         switch a {
         case .click: click()
-        case .scroll(let dir):
-            CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1,
-                    wheel1: dir * 300, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
+        case .scroll(let dir) where key.hasPrefix("SWIPE"):
+            smoothScroll(v: Double(flip ? -dir : dir) * swipeScrollDistance(speed), h: 0)
+        case .hscroll(let dir) where key.hasPrefix("SWIPE"):
+            smoothScroll(v: 0, h: Double(flip ? -dir : dir) * swipeScrollDistance(speed))
         default: a.run()
         }
+    }
+
+    /// Quãng cuộn (điểm ảnh) của một cú vuốt: vuốt chậm ~250 px, vuốt vừa ~500 px, hất mạnh tới ~1300 px.
+    private func swipeScrollDistance(_ speed: Double?) -> Double {
+        let v = speed ?? 2
+        let factor = min(max(0.5 + (v - 1) * 0.5, 0.5), 2.6)
+        return 500 * scrollSpeed * factor
     }
 
     // Vị trí con trỏ: dùng lại vị trí vừa gửi nếu còn mới (tránh hỏi hệ thống ở từng khung hình)
@@ -445,62 +483,43 @@ final class TouchEngine {
         cursorHistory.removeAll { now - $0.t > 0.5 }
     }
 
+    // Cuộn kiểu Magic Trackpad: khoá trục + gia tốc, rồi nạp vào ScrollPump (xuất đều theo tần số màn hình).
+    private enum ScrollAxis { case undecided, vertical, horizontal, free }
+    private var scrollAxis = ScrollAxis.undecided
+    private var axisBufX: Float = 0, axisBufY: Float = 0
+    private var scrollVel: Double = 0                 // tốc độ ngón (đơn vị chuẩn hoá / giây), làm mượt
+
     private func scroll(_ dx: Float, _ dy: Float) {
-        let sign: Float = naturalScroll ? -1 : 1
-        let k = Float(scrollSpeed) * 1500
-        // làm mượt nhẹ (lọc thông thấp) để cuộn không bị khựng khi khung cảm ứng đến không đều
-        smoothX = smoothX * 0.35 + dx * k * -sign * 0.65
-        smoothY = smoothY * 0.35 + dy * k * sign * 0.65
-        let px = smoothX, py = smoothY
-        didScroll = true
-        scrollSamples.append((lastFrameTime, px, py))
-        if scrollSamples.count > 8 { scrollSamples.removeFirst() }
-        emitScroll(px, py, phase: scrollStarted ? 2 : 1)
-        scrollStarted = true
-    }
-
-    /// Gửi sự kiện cuộn (điểm ảnh), cộng dồn phần lẻ.
-    private func emitScroll(_ x: Float, _ y: Float, phase: Int64, momentum: Int64 = 0) {
-        scrollRemX += x; scrollRemY += y
-        let v = Int32(scrollRemY), h = Int32(scrollRemX)
-        guard v != 0 || h != 0 else { return }
-        scrollRemY -= Float(v); scrollRemX -= Float(h)
-        postScroll(v: v, h: h, phase: phase, momentum: momentum)
-    }
-
-    /// Nhấc tay sau khi cuộn: gửi "ended", rồi (nếu bật) quán tính theo pha momentum của hệ thống.
-    private func finishScroll(endTime: Double) {
-        scrollStarted = false
-        smoothX = 0; smoothY = 0
-        postScroll(v: 0, h: 0, phase: 4)
-        if scrollMomentum { startInertia(endTime: endTime) }
-    }
-
-    // MARK: Cuộn quán tính
-
-    private func startInertia(endTime: Double) {
-        let recent = scrollSamples.filter { endTime - $0.t < 0.1 }
-        guard recent.count >= 2, let first = recent.first, let last = recent.last, endTime - last.t < 0.06 else { return }
-        let span = Float(max(last.t - first.t, 0.016) + frameDt)
-        var vx = max(min(recent.reduce(0) { $0 + $1.x } / span, 6000), -6000)       // điểm ảnh / giây
-        var vy = max(min(recent.reduce(0) { $0 + $1.y } / span, 6000), -6000)
-        guard abs(vx) > 150 || abs(vy) > 150 else { return }
-        scrollRemX = 0; scrollRemY = 0
-        var firstTick = true
-        inertiaActive = true
-        inertiaTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] t in
-            guard let self = self else { t.invalidate(); return }
-            vx *= 0.955; vy *= 0.955                                                // ma sát: giảm dần
-            if abs(vx) < 30 && abs(vy) < 30 { self.stopInertia(); return }
-            self.emitScroll(vx / 60, vy / 60, phase: 0, momentum: firstTick ? 1 : 2)
-            firstTick = false
+        var dx = dx, dy = dy
+        // 1) Khoá trục như trackpad thật: đi gần thẳng dọc/ngang thì bỏ hẳn phần lệch của trục kia
+        //    (tránh trang trôi ngang và vô tình kích hoạt vuốt Back/Forward khi đang cuộn dọc).
+        if scrollAxis == .undecided {
+            axisBufX += dx; axisBufY += dy
+            let ax = abs(axisBufX), ay = abs(axisBufY)
+            // chờ đủ quãng để biết hướng; chưa đủ thì CHƯA tính là cuộn (để chạm 2 ngón / chạm đúp 2 ngón vẫn nhận được)
+            guard hypotf(ax, ay) >= 0.02 else { return }
+            scrollAxis = ay >= ax * 1.6 ? .vertical : ax >= ay * 1.6 ? .horizontal : .free
+            dx = axisBufX; dy = axisBufY
         }
+        switch scrollAxis {
+        case .vertical: dx = 0
+        case .horizontal: dy = 0
+        default: break
+        }
+        didScroll = true
+        // 2) Gia tốc: chậm = chính xác (≈ 1:1), hất nhanh = đi xa (tới ~3,5 lần)
+        let dist = Double(hypotf(dx, dy))
+        let inst = dist / max(frameDt, 0.004)
+        scrollVel += (inst - scrollVel) * 0.35
+        let gain = 0.75 + 2.75 * (1 - exp(-scrollVel / 1.6))
+        let sign: Double = naturalScroll ? -1 : 1
+        let k = scrollSpeed * 1100 * gain
+        ScrollPump.shared.feed(Double(dx) * k * -sign, Double(dy) * k * sign, ts: lastFrameTime)   // dấu thời gian lấy mẫu của touchpad
     }
 
-    private func stopInertia() {
-        inertiaTimer?.invalidate()
-        inertiaTimer = nil
-        if inertiaActive { inertiaActive = false; postScroll(v: 0, h: 0, phase: 0, momentum: 3) }
+    /// Nhấc tay sau khi cuộn: "ended" rồi (nếu bật) quán tính.
+    private func finishScroll() {
+        ScrollPump.shared.release(momentum: scrollMomentum)
     }
 }
 

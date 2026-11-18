@@ -118,5 +118,22 @@ private let englishStrings: [String: String] = [
     "Nút này đã có tên: %@": "This button already has a name: %@", "Mã nút: %@": "Button code: %@",
     "Đặt tên cho nút (mã %@)": "Name this button (code %@)",
     "Chữ thường, không dấu, không khoảng trắng. Ví dụ: ring_up": "Lowercase, no accents, no spaces. Example: ring_up",
+    "Rê chuột lên nút trên hình hoặc bấm nút thật trên remote để thấy hàng tương ứng.":
+        "Hover a button in the picture, or press a real button on the remote, to see its row.",
+    "Touchpad của remote": "Remote touchpad", "Tuỳ chọn kỹ thuật": "Technical options",
+    "Mã thiết bị cảm ứng": "Touch device ID",
+    "Thường không cần chỉnh gì: app tự nhận touchpad của Siri Remote đời 1 và đời 3.":
+        "Usually nothing to change: the app detects the touchpad of Siri Remote gen 1 and gen 3 automatically.",
+    "Cảm ứng đang tắt — bật lại ở tab Cảm ứng": "Touch is off — turn it on in the Touch tab",
+    "Đang nhận cảm ứng từ remote": "Receiving touch from the remote",
+    "Chưa thấy remote — hãy kết nối qua Bluetooth": "No remote found — connect it via Bluetooth",
+    "Remote đã kết nối nhưng chưa nhận được touchpad — thử tắt/bật remote": "Remote connected but no touchpad found — try turning the remote off and on",
+    "Cuộn ngang ←": "Scroll left", "Cuộn ngang →": "Scroll right",
+    "Cuộn tự nhiên (đảo chiều, áp dụng cả cho vuốt gán Cuộn)": "Natural scrolling (reversed, also for swipes set to Scroll)",
+    "Độ mượt khi cuộn": "Scroll smoothness",
+    "Độ mượt: thấp = trang bám sát ngón tay nhưng có thể giật theo nhịp Bluetooth; cao = trang trôi đều hơn nhưng chạy sau ngón một chút.":
+        "Smoothness: low = the page tracks your finger closely but may stutter with Bluetooth timing; high = steadier motion with slightly more lag.",
+    "Zoom thông minh (như Magic Trackpad)": "Smart zoom (like Magic Trackpad)",
+    "Chạm đúp 1 ngón": "One-finger double tap",
     "Lưu": "Save", "Tên không hợp lệ hoặc đã tồn tại: %@": "Invalid or existing name: %@",
 ]

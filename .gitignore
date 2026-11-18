@@ -4,3 +4,4 @@ build/
 *.dmg
 sniffer
 sniffer*.log
+scroll.log
