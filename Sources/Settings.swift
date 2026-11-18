@@ -1055,3 +1055,55 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
         commit()
     }
 }
+
+// MARK: - Ảnh chụp cho README
+
+extension SettingsWindow {
+    /// Chụp các màn hình chính (cửa sổ của chính app, không cần quyền ghi màn hình) vào `dir` rồi gọi `done`.
+    /// Chạy: SiriRemoteMac.app/Contents/MacOS/SiriRemoteMac --screenshots docs/images
+    func captureScreenshots(to dir: String, done: @escaping () -> Void) {
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        func save(_ name: String, _ windowNumber: Int?) {
+            guard let n = windowNumber,
+                  let img = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(n), [.boundsIgnoreFraming, .bestResolution]),
+                  let png = NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:]) else { return }
+            try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
+        }
+        let page: (Int) -> Void = { [weak self] i in self?.segment.selectedSegment = i; self?.showPage(i, animated: false) }
+        // (thao tác, tên ảnh chụp sau khi thao tác xong)
+        let steps: [(() -> Void, String)] = [
+            ({ [weak self] in page(0); self?.setHover("home") }, "settings-buttons"),
+            ({ [weak self] in self?.setHover(nil); page(1) }, "settings-touch"),
+            ({ [weak self] in
+                guard let self = self else { return }
+                let sv = self.pages[1]
+                if let doc = sv.documentView {
+                    sv.contentView.scroll(to: NSPoint(x: 0, y: max(0, doc.bounds.height - sv.contentView.bounds.height)))
+                    sv.reflectScrolledClipView(sv.contentView)
+                }
+                self.setHover("swipeup")
+            }, "settings-gestures"),
+            ({ [weak self] in self?.setHover(nil); page(2) }, "settings-advanced"),
+            ({ page(0); ChoiceMenu.showPower() }, "power-menu"),
+            ({ ChoiceMenu.active?.move(2) }, "power-menu-lock"),
+            ({ ChoiceMenu.active?.dismiss(); ChoiceMenu.showTouchMode() }, "touch-mode-menu"),
+        ]
+        func run(_ i: Int) {
+            guard i < steps.count else { ChoiceMenu.active?.dismiss(); done(); return }
+            steps[i].0()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                let name = steps[i].1
+                // ảnh bảng chọn: chụp cửa sổ bảng; còn lại: cửa sổ cài đặt
+                save(name, name.contains("menu") ? ChoiceMenu.active?.windowNumber : self.window.windowNumber)
+                run(i + 1)
+            }
+        }
+        ChoiceMenu.solidBackground = true
+        // chờ remote kết nối (tối đa 8 giây) và hiệu ứng mở cửa sổ xong
+        func waitRemote(_ tries: Int) {
+            if controller.isConnected || tries == 0 { updateStatus(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { run(0) }; return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { waitRemote(tries - 1) }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { waitRemote(28) }
+    }
+}

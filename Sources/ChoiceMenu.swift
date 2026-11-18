@@ -12,6 +12,8 @@ import QuartzCore
 final class ChoiceMenu {
     /// Bảng đang mở (nếu có): Controller / TouchEngine chuyển nút và cử chỉ cho nó.
     private(set) static var active: ChoiceMenu?
+    /// Khi chụp ảnh cho README: nền tối đặc (chụp riêng cửa sổ thì kính mờ không có gì phía sau để làm mờ → xám bạc).
+    static var solidBackground = false
 
     struct Item {
         let title: String
@@ -68,6 +70,7 @@ final class ChoiceMenu {
     private let glow = CAGradientLayer()          // vệt sáng màu phía sau ô đang chọn
     private var tileCenters: [CGPoint] = []
     private var panel: NSPanel?
+    var windowNumber: Int? { panel?.windowNumber }
     private var tiles: [Tile] = []
     private var focus: Int
     private var touchAccum: Float = 0
@@ -105,6 +108,12 @@ final class ChoiceMenu {
         blur.layer?.cornerRadius = 28
         blur.layer?.masksToBounds = true
         p.contentView = blur
+        if ChoiceMenu.solidBackground {
+            let bg = NSView(frame: blur.bounds)
+            bg.wantsLayer = true
+            bg.layer?.backgroundColor = CGColor(srgbRed: 0.13, green: 0.13, blue: 0.15, alpha: 1)
+            blur.addSubview(bg)
+        }
 
         let title = NSTextField(labelWithString: titleText)
         title.font = .systemFont(ofSize: 15, weight: .semibold)

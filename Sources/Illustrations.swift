@@ -592,6 +592,14 @@ final class GestureDemoView: NSView {
 }
 
 
+/// Dấu ✓ của thẻ đang chọn: tick trắng trên vòng tròn màu nhấn (bảng màu 2 lớp; 1 màu thì thành chấm đặc).
+private func checkBadgeContents() -> Any? {
+    guard let img = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)?
+        .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.white, .controlAccentColor]))) else { return nil }
+    return img.layerContents(forContentsScale: 2)
+}
+
 // MARK: - Thẻ chọn chế độ cảm ứng
 
 final class TouchModeTile: NSView {
@@ -610,8 +618,9 @@ final class TouchModeTile: NSView {
         layer?.cornerRadius = 12
         layer?.borderWidth = 1.5
 
-        let stageHost = NSView()
+        let stageHost = StageView()
         stageHost.wantsLayer = true
+        stageHost.onLayout = { [weak self] in self?.layoutStage() }
         stageHost.translatesAutoresizingMaskIntoConstraints = false
         stageHost.heightAnchor.constraint(equalToConstant: 84).isActive = true
         stageHost.layer?.addSublayer(stage)
@@ -645,18 +654,28 @@ final class TouchModeTile: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Vùng chứa hình động: tự báo khi có kích thước. (Trước đây hình được dựng trong layout() của thẻ,
+    /// nhưng stack view xếp vùng này SAU thẻ nên lúc đó nó còn rộng 0 → hình không bao giờ được dựng.)
+    private final class StageView: NSView {
+        var onLayout: (() -> Void)?
+        override func layout() { super.layout(); onLayout?() }
+    }
+
     private weak var stageHost: NSView?
     private var builtFor: CGSize = .zero
 
+    private func layoutStage() {
+        guard let h = stageHost, h.bounds.size != builtFor, h.bounds.width > 0 else { return }
+        builtFor = h.bounds.size
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        stage.frame = h.bounds
+        buildStage()
+        CATransaction.commit()
+    }
+
     override func layout() {
         super.layout()
-        if let h = stageHost, h.bounds.size != builtFor, h.bounds.width > 0 {
-            builtFor = h.bounds.size
-            CATransaction.begin(); CATransaction.setDisableActions(true)
-            stage.frame = h.bounds
-            buildStage()
-            CATransaction.commit()
-        }
+        layoutStage()
         CATransaction.begin(); CATransaction.setDisableActions(true)
         badge.frame = CGRect(x: bounds.width - 30, y: bounds.height - 30, width: 22, height: 22)
         CATransaction.commit()
@@ -665,7 +684,7 @@ final class TouchModeTile: NSView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         updateState(animated: false)
-        builtFor = .zero; needsLayout = true
+        builtFor = .zero; needsLayout = true; stageHost?.needsLayout = true
     }
 
     private func buildStage() {
@@ -808,7 +827,7 @@ final class TouchModeTile: NSView {
             l.borderColor = border
         }
         CATransaction.begin(); CATransaction.setDisableActions(!animated)
-        badge.contents = symbolLayerContents("checkmark.circle.fill", size: 16, color: .controlAccentColor)
+        badge.contents = checkBadgeContents()
         badge.opacity = isSelected ? 1 : 0
         CATransaction.commit()
         if isSelected && animated && !reduceMotion {

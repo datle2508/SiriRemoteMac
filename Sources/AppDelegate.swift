@@ -83,6 +83,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         touchEngine.start(force: true)
         refresh()
         if CommandLine.arguments.contains("--settings") { openSettings() }   // mở thẳng cửa sổ cài đặt (tiện khi phát triển)
+        // --screenshots <thư mục>: chụp ảnh giao diện cho README rồi thoát (xem SettingsWindow.captureScreenshots)
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--screenshots"), i + 1 < args.count {
+            openSettings()
+            settingsWindow?.captureScreenshots(to: args[i + 1]) { NSApp.terminate(nil) }
+        }
     }
 
     /// Biểu tượng thanh menu (template, đơn sắc), cùng bố cục với icon app:
