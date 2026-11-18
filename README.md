@@ -32,7 +32,7 @@ Menu 🎛 → **Khởi động cùng macOS** (chỉ khi chạy từ `.app`).
 
 ## Cảm ứng touchpad
 
-- **Giữ nút Siri** (mặc định) để đổi nhanh giữa chế độ *Con trỏ* và *Vuốt/chạm*; có tiếng báo và tên chế độ hiện cạnh biểu tượng thanh menu. Hành động `toggletouch` gán được cho nút/cử chỉ khác.
+- **Giữ nút Siri** (mặc định) mở bảng chọn chế độ *Con trỏ* / *Vuốt/chạm* / *Tắt* (hành động `touchmenu`); tiêu điểm đặt sẵn ở chế độ hay đổi sang nên giữ Siri rồi bấm touchpad là đổi qua lại như cũ. Trong bảng, bấm Siri để chuyển ô (dùng được cả khi cảm ứng đang tắt). Hành động `toggletouch` đổi thẳng không qua bảng.
 - Ở chế độ Con trỏ, nếu bạn đã gán hành động cho một hướng vuốt, con trỏ **đứng yên** khi bạn vuốt nhanh theo hướng đó. Di chuyển chậm, chéo, hoặc theo hướng chưa gán thì con trỏ chạy bình thường.
 - **Safari** có sẵn cấu hình riêng (thêm một lần, sửa/xóa tùy ý): Menu = Back (`cmd+[`), Home = Forward (`cmd+]`). Hành động thử nghiệm `nav:back` / `nav:forward` giả lập cú vuốt hai ngón để có hiệu ứng trượt trang (chọn *Back/Forward (thử nghiệm…)* trong cài đặt). Cần bật *Vuốt giữa các trang* trong System Settings → Trackpad → More Gestures, trang phải đang ở mép trái khi Back; app tự đưa con trỏ vào cửa sổ Safari nếu nó đang ở chỗ khác.
 
@@ -102,6 +102,8 @@ File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** 
 | `app:Tên App` | Mở ứng dụng |
 | `click` | Click chuột trái (không kết hợp với `+hold`/`+double`) |
 | `sleep`, `displaysleep` | Cho Mac ngủ / tắt màn hình |
+| `powermenu` | Menu nguồn như Apple TV (mặc định khi giữ Home): bảng chọn Ngủ / Tắt màn hình / Khóa / Màn hình chờ / Hủy; vuốt trái-phải để chọn, bấm touchpad để xác nhận, Menu để hủy |
+| `touchmenu` | Bảng chọn chế độ cảm ứng Con trỏ / Vuốt-chạm / Tắt (mặc định khi giữ Siri) |
 | `zoomtoggle` | Zoom nhanh: lần đầu phóng to 3 mức (⌘=), lần sau về kích thước thật (⌘0); hợp với cử chỉ `twofingerdoubletap` |
 | `smartzoom` | Zoom thông minh như chạm đúp hai ngón trên Magic Trackpad (phóng vừa khối nội dung dưới con trỏ, làm lại thì về cũ); gán cho cử chỉ `twofingerdoubletap` |
 | `zoomin`, `zoomout`, `zoomreset` | ⌘+, ⌘−, ⌘0 |

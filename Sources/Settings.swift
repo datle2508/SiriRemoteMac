@@ -38,7 +38,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
                       ("zoomout", T("Thu nhỏ (⌘−)")), ("zoomreset", T("Kích thước thật (⌘0)"))]),
         (T("Hệ thống"), [("mission", "Mission Control"), ("expose", T("Exposé (cửa sổ của app)")), ("screensaver", T("Màn hình chờ")),
                       ("showdesktop", T("Hiện màn hình nền")), ("lockscreen", T("Khóa màn hình")), ("sleep", T("Cho Mac ngủ")), ("displaysleep", T("Tắt màn hình")),
-                      ("toggletouch", T("Đổi chế độ cảm ứng (con trỏ ↔ vuốt)"))]),
+                      ("toggletouch", T("Đổi chế độ cảm ứng (con trỏ ↔ vuốt)")),
+                      ("powermenu", T("Menu nguồn (như Apple TV)")), ("touchmenu", T("Chọn chế độ cảm ứng (bảng chọn)"))]),
     ]
     /// Biểu tượng SF Symbols cho từng hành động / hàng (nếu hệ thống không có thì bỏ qua, không lỗi).
     private static let icons: [String: String] = [
@@ -52,7 +53,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
         "click": "cursorarrow.click", "rightclick": "cursorarrow.click.2", "scroll:up": "arrow.up.circle", "scroll:down": "arrow.down.circle",
         "scroll:left": "arrow.left.circle", "scroll:right": "arrow.right.circle",
         "mission": "rectangle.3.group", "expose": "macwindow.on.rectangle", "screensaver": "photo.tv", "lockscreen": "lock.fill", "showdesktop": "menubar.dock.rectangle",
-        "sleep": "moon.zzz.fill", "displaysleep": "display", "toggletouch": "arrow.left.arrow.right",
+        "sleep": "moon.zzz.fill", "displaysleep": "display", "toggletouch": "arrow.left.arrow.right", "powermenu": "power", "touchmenu": "hand.point.up.left.fill",
         "@app": "square.grid.2x2", "@key": "keyboard", "none": "nosign",
         // hàng nút / cử chỉ
         "touchpad": "hand.point.up.left.fill", "menu": "chevron.backward.circle", "home": "tv", "siri": "mic.fill",

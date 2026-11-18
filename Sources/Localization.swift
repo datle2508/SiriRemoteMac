@@ -135,5 +135,10 @@ private let englishStrings: [String: String] = [
         "Smoothness (cursor and scrolling): high = stronger jitter filtering and steadier motion with slightly more lag; low = tracks your finger closely; 0% = off.",
     "Zoom thông minh (như Magic Trackpad)": "Smart zoom (like Magic Trackpad)",
     "Chạm đúp 1 ngón": "One-finger double tap",
+    "Menu nguồn (như Apple TV)": "Power menu (like Apple TV)",
+    "Ngủ": "Sleep", "Khóa": "Lock", "Đang dùng": "In use",
+    "Chọn chế độ cảm ứng (bảng chọn)": "Choose touch mode (picker)",
+    "Bạn muốn làm gì?": "What would you like to do?",
+    "Vuốt để chọn · bấm touchpad để xác nhận · Menu để hủy": "Swipe to choose · click the touchpad to confirm · Menu to cancel",
     "Lưu": "Save", "Tên không hợp lệ hoặc đã tồn tại: %@": "Invalid or existing name: %@",
 ]

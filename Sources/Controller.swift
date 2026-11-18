@@ -19,6 +19,7 @@ final class Controller {
     var isConnected: Bool { !remotes.isEmpty }
     /// Khi khác nil: nút remote kế tiếp được bấm sẽ được gửi vào đây (không chạy hành động) để "học" mã nút.
     var learnHandler: ((String) -> Void)?
+    private var menuSwallowed: Set<String> = []      // nút đã được bảng chọn nhận lúc nhấn: bỏ qua lúc thả
 
     func start() {
         stop()
@@ -112,6 +113,14 @@ final class Controller {
         if let h = learnHandler {
             if down { learnHandler = nil; DispatchQueue.main.async { h(key) } }
             return
+        }
+        // Bảng chọn (menu nguồn / chế độ cảm ứng) đang mở: nút remote dùng để điều hướng (trừ âm lượng).
+        // Nút đã được bảng nhận lúc NHẤN thì nuốt luôn lúc THẢ: bảng đóng ngay khi nhấn, nếu để lọt nhịp thả thì
+        // nút có hành động giữ / nhấn đúp (chạy bấm thường lúc thả) sẽ chạy nhầm, ví dụ Menu = bài trước.
+        if !down, menuSwallowed.remove(key) != nil { return }
+        if down, let menu = ChoiceMenu.active {
+            let name = buttonNames.first(where: { $0.value == key })?.key ?? ""
+            if menu.button(name) { menuSwallowed.insert(key); return }
         }
         if down, remoteEventObserver != nil, let name = buttonNames.first(where: { $0.value == key })?.key { notifyRemoteEvent(name) }
         if debugLog { log("BUTTON \(key) (\(buttonNames.first { $0.value == key }?.key ?? "?")) \(down ? "down" : "up")") }

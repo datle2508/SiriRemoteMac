@@ -101,16 +101,7 @@ func postScroll(v: Int32, h: Int32, phase: Int64, momentum: Int64 = 0) {
 }
 
 /// Đổi qua lại giữa chế độ con trỏ và chế độ vuốt/chạm; lưu vào file cấu hình.
-func toggleTouchMode() {
-    var c = ConfigFile.load()
-    let next = touchMode == .cursor ? "swipe" : "cursor"
-    c.global["touchmode"] = next
-    c.save()
-    controller.reloadMap()
-    NSSound(named: NSSound.Name(next == "cursor" ? "Pop" : "Tink"))?.play()
-    appDelegate.flash(next == "cursor" ? T("Con trỏ") : T("Vuốt/chạm"))
-    appDelegate.refresh()
-}
+func toggleTouchMode() { setTouchMode(touchMode == .cursor ? .swipe : .cursor) }
 // MARK: - Cảm ứng (MultitouchSupport, framework riêng của Apple)
 
 struct MTPoint { var x: Float; var y: Float }
@@ -309,6 +300,7 @@ final class TouchEngine {
         let dx = c.x - lastCentroid.x, dy = c.y - lastCentroid.y
         travel += hypotf(dx, dy)
         lastCentroid = c
+        if let menu = ChoiceMenu.active { menu.touchMove(dx); return }   // bảng chọn đang mở: rê ngang = chuyển ô
         let f = filtered(c, reset: false)                   // chuyển động đã khử rung cho con trỏ / cuộn
         let fdx = Float(f.x - lastFiltered.x), fdy = Float(f.y - lastFiltered.y)
         lastFiltered = f
@@ -347,6 +339,7 @@ final class TouchEngine {
         let dur = ts - startTime
         let dx = lastCentroid.x - startCentroid.x, dy = lastCentroid.y - startCentroid.y
         let fingers = maxFingers
+        if let menu = ChoiceMenu.active { menu.touchEnded(); return }    // không chạy cử chỉ khi bảng chọn mở
         if debugLog { log("TOUCH kết thúc: ngón=\(fingers) dx=\(dx) dy=\(dy) thời gian=\(dur) quãng=\(travel)") }
         if tapDragging {                                    // nhả chuột sau khi kéo
             tapDragging = false; mouseButtonDown = false

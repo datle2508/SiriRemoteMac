@@ -19,6 +19,8 @@ enum Action {
     case smartZoom                  // zoom thông minh như chạm đúp hai ngón trên Magic Trackpad
     case dock(String)               // thông báo gửi cho Dock (Mission Control, Exposé, Show Desktop)
     case toggleTouch                // đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
+    case powerMenu                  // bảng chọn Ngủ / Tắt màn hình / Khóa / Màn hình chờ (như Apple TV)
+    case touchMenu                  // bảng chọn chế độ cảm ứng Con trỏ / Vuốt-chạm / Tắt
 
     private static let keyCodes: [String: CGKeyCode] = [
         "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
@@ -39,6 +41,8 @@ enum Action {
     static func parse(_ spec: String) -> Action? {
         if spec == "click" { return .click }
         if spec == "toggletouch" { return .toggleTouch }
+        if spec == "powermenu" { return .powerMenu }
+        if spec == "touchmenu" { return .touchMenu }
         if spec == "rightclick" { return .rightClick }
         if spec == "nav:back" { return .nav(true) }
         if spec == "nav:forward" { return .nav(false) }
@@ -130,6 +134,10 @@ enum Action {
             }
         case .toggleTouch:
             toggleTouchMode()
+        case .powerMenu:
+            ChoiceMenu.showPower()
+        case .touchMenu:
+            ChoiceMenu.showTouchMode()
         case .nav(let back):
             navSwipe(back: back)
         case .click:                    // dùng khi click đi qua đường "giữ"/"nhấn đúp": nhấn rồi thả ngay

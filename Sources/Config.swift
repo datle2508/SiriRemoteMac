@@ -35,9 +35,9 @@ func registerCustomButtons(_ raw: [String: Any]) {
 let defaultMap: [String: String] = [
     "menu": "media:previous",       // bài trước
     "home": "media:next",           // bài kế tiếp (bấm nhanh)
-    "home+hold": "sleep",           // giữ nút đủ lâu để Mac sleep
+    "home+hold": "powermenu",       // giữ Home: bảng chọn Ngủ / Tắt màn hình / Khóa… (như Apple TV)
     "siri": "app:Siri",             // mở Siri
-    "siri+hold": "toggletouch",     // giữ Siri: đổi chế độ cảm ứng con trỏ ↔ vuốt/chạm
+    "siri+hold": "touchmenu",       // giữ Siri: bảng chọn chế độ cảm ứng (Con trỏ / Vuốt-chạm / Tắt)
     "touchpad": "click",            // nhấn touchpad = click chuột trái
     "playpause": "media:playpause",
     "volup": "media:volumeup",
