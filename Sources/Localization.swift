@@ -130,9 +130,9 @@ private let englishStrings: [String: String] = [
     "Remote đã kết nối nhưng chưa nhận được touchpad — thử tắt/bật remote": "Remote connected but no touchpad found — try turning the remote off and on",
     "Cuộn ngang ←": "Scroll left", "Cuộn ngang →": "Scroll right",
     "Cuộn tự nhiên (đảo chiều, áp dụng cả cho vuốt gán Cuộn)": "Natural scrolling (reversed, also for swipes set to Scroll)",
-    "Độ mượt khi cuộn": "Scroll smoothness",
-    "Độ mượt: thấp = trang bám sát ngón tay nhưng có thể giật theo nhịp Bluetooth; cao = trang trôi đều hơn nhưng chạy sau ngón một chút.":
-        "Smoothness: low = the page tracks your finger closely but may stutter with Bluetooth timing; high = steadier motion with slightly more lag.",
+    "Độ mượt": "Smoothness",
+    "Độ mượt (con trỏ và cuộn): cao = khử rung mạnh hơn, đi đều hơn nhưng chạy sau ngón một chút; thấp = bám sát ngón; 0% = tắt làm mượt.":
+        "Smoothness (cursor and scrolling): high = stronger jitter filtering and steadier motion with slightly more lag; low = tracks your finger closely; 0% = off.",
     "Zoom thông minh (như Magic Trackpad)": "Smart zoom (like Magic Trackpad)",
     "Chạm đúp 1 ngón": "One-finger double tap",
     "Lưu": "Save", "Tên không hợp lệ hoặc đã tồn tại: %@": "Invalid or existing name: %@",

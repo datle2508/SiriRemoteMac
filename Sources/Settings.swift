@@ -622,8 +622,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
             add(card(T("Độ nhạy"), "dial.medium", [
                 sliderRow(T("Tốc độ con trỏ"), "touchspeed", 0.3, 4, 1.5),
                 sliderRow(T("Tốc độ cuộn"), "scrollspeed", 0.2, 3, 1.0),
-                sliderRow(T("Độ mượt khi cuộn"), "scrollsmooth", 0, 1, 0.55),
-                note(T("Độ mượt: thấp = trang bám sát ngón tay nhưng có thể giật theo nhịp Bluetooth; cao = trang trôi đều hơn nhưng chạy sau ngón một chút.")),
+                sliderRow(T("Độ mượt"), "scrollsmooth", 0, 1, 0.55),
+                note(T("Độ mượt (con trỏ và cuộn): cao = khử rung mạnh hơn, đi đều hơn nhưng chạy sau ngón một chút; thấp = bám sát ngón; 0% = tắt làm mượt.")),
             ]), to: touchHost)
 
             add(card(T("Cảm giác như Magic Trackpad"), "wand.and.stars", [
