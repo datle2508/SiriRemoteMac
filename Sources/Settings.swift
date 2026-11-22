@@ -583,7 +583,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     /// Chữ hiện cạnh thanh trượt: độ mượt hiện theo phần trăm, còn lại là số.
     private func valueText(_ id: String, _ v: Double) -> String {
-        id == "scrollsmooth" ? "\(Int((v * 100).rounded()))%" : String(format: "%.2f", v)
+        id == "scrollsmooth" || id == "swipepriority" ? "\(Int((v * 100).rounded()))%" : String(format: "%.2f", v)
     }
 
     private func sliderRow(_ title: String, _ id: String, _ lo: Double, _ hi: Double, _ def: Double) -> NSView {
@@ -625,6 +625,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
                 sliderRow(T("Tốc độ cuộn"), "scrollspeed", 0.2, 3, 1.0),
                 sliderRow(T("Độ mượt"), "scrollsmooth", 0, 1, 0.55),
                 note(T("Độ mượt (con trỏ và cuộn): cao = khử rung mạnh hơn, đi đều hơn nhưng chạy sau ngón một chút; thấp = bám sát ngón; 0% = tắt làm mượt.")),
+                sliderRow(T("Nhận vuốt"), "swipepriority", 0, 1, 1),
+                note(T("Nhận vuốt (khi có gán vuốt 1 ngón): cao = chờ chắc chắn không phải cú vuốt rồi mới cho con trỏ chạy, ít nhầm nhưng con trỏ khởi động chậm hơn; thấp = con trỏ chạy ngay, đôi khi cú vuốt làm con trỏ nhích rồi về chỗ cũ.")),
             ]), to: touchHost)
 
             add(card(T("Cảm giác như Magic Trackpad"), "wand.and.stars", [

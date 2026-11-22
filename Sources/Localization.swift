@@ -133,6 +133,9 @@ private let englishStrings: [String: String] = [
     "Độ mượt": "Smoothness",
     "Độ mượt (con trỏ và cuộn): cao = khử rung mạnh hơn, đi đều hơn nhưng chạy sau ngón một chút; thấp = bám sát ngón; 0% = tắt làm mượt.":
         "Smoothness (cursor and scrolling): high = stronger jitter filtering and steadier motion with slightly more lag; low = tracks your finger closely; 0% = off.",
+    "Nhận vuốt": "Swipe detection",
+    "Nhận vuốt (khi có gán vuốt 1 ngón): cao = chờ chắc chắn không phải cú vuốt rồi mới cho con trỏ chạy, ít nhầm nhưng con trỏ khởi động chậm hơn; thấp = con trỏ chạy ngay, đôi khi cú vuốt làm con trỏ nhích rồi về chỗ cũ.":
+        "Swipe detection (when one-finger swipes are assigned): high = waits until it is sure the touch is not a swipe before moving the cursor, fewer mistakes but the cursor starts later; low = the cursor moves right away, and a swipe sometimes nudges it before it snaps back.",
     "Zoom thông minh (như Magic Trackpad)": "Smart zoom (like Magic Trackpad)",
     "Chạm đúp 1 ngón": "One-finger double tap",
     "Menu nguồn (như Apple TV)": "Power menu (like Apple TV)",

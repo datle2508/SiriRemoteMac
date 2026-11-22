@@ -125,7 +125,7 @@ struct MTTouch {
     var density: Float
 }
 
-struct TouchPoint { var id: Int32; var x: Float; var y: Float; var state: Int32 }
+struct TouchPoint { var id: Int32; var x: Float; var y: Float; var state: Int32; var size: Float = 1 }
 
 typealias MTContactCB = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, Double, Int32) -> Void
 typealias MTFnList = @convention(c) () -> UnsafeRawPointer?
@@ -141,7 +141,7 @@ func touchCallbackFn(_ dev: UnsafeMutableRawPointer?, _ raw: UnsafeMutableRawPoi
     if let raw = raw, n > 0 {
         let t = raw.assumingMemoryBound(to: MTTouch.self)
         for i in 0..<Int(n) {
-            list.append(TouchPoint(id: t[i].identifier, x: t[i].normalized.pos.x, y: t[i].normalized.pos.y, state: t[i].state))
+            list.append(TouchPoint(id: t[i].identifier, x: t[i].normalized.pos.x, y: t[i].normalized.pos.y, state: t[i].state, size: t[i].size))
         }
     }
     DispatchQueue.main.async { touchEngine.process(list, timestamp: ts) }
@@ -154,6 +154,10 @@ struct OneEuro {
     var minCutoff: Double, beta: Double
     private var x = 0.0, y = 0.0, dx = 0.0, dy = 0.0, primed = false
     init(minCutoff: Double, beta: Double) { self.minCutoff = minCutoff; self.beta = beta }
+    /// Tham số theo "Độ mượt" (0…1); nil = không lọc (dưới 5 %).
+    static func params(smooth s: Double) -> (minCutoff: Double, beta: Double)? {
+        s < 0.05 ? nil : (6 - 4 * s, 15 * pow(1.0 / 15, s))
+    }
     mutating func reset(_ px: Double, _ py: Double) { x = px; y = py; dx = 0; dy = 0; primed = true }
     private static func alpha(_ cutoff: Double, _ dt: Double) -> Double { let r = 2 * .pi * cutoff * dt; return r / (r + 1) }
     mutating func filter(_ px: Double, _ py: Double, dt: Double) -> (Double, Double) {
@@ -195,14 +199,17 @@ final class TouchEngine {
     private func filtered(_ c: (x: Float, y: Float), reset: Bool) -> (x: Double, y: Double) {
         let s = min(max(scrollSmooth, 0), 1)
         let p = (x: Double(c.x), y: Double(c.y))
-        if s < 0.05 { return p }
-        euro.minCutoff = 6 - 4 * s
-        euro.beta = 15 * pow(1.0 / 15, s)
+        guard let prm = OneEuro.params(smooth: s) else { return p }
+        euro.minCutoff = prm.minCutoff
+        euro.beta = prm.beta
         if reset { euro.reset(p.x, p.y); return p }
         let f = euro.filter(p.x, p.y, dt: max(frameDt, 0.004))
         return (f.0, f.1)
     }
     private var frameDt = 1.0 / 60
+    private var peakSize: Float = 1                 // kích thước vùng chạm lớn nhất gần đây (giảm dần 3 %/khung)
+    private var liftX: Float = 0, liftY: Float = 0  // chuyển động đang giữ vì có vẻ ngón sắp nhấc
+    private var recent: [(t: Double, x: Float, y: Float)] = []   // vài toạ độ gốc gần nhất (tốc độ lúc nhấc tay)
     private var pressTravel: Float = 0
     // Chạm rồi kéo
     private var lastTapEnd = -10.0
@@ -275,6 +282,9 @@ final class TouchEngine {
             inSession = true
             startTime = timestamp; startCentroid = c; lastCentroid = c
             lastFiltered = filtered(c, reset: true); cursorSpeed = 0
+            peakSize = active[0].size; liftX = 0; liftY = 0
+            recent = [(timestamp, c.x, c.y)]
+            touchStartPos = touchMode == .cursor && active.count == 1 ? currentPos() : nil
             maxFingers = active.count; lastCount = active.count; travel = 0
             cursorDecided = false; bufX = 0; bufY = 0
             didScroll = false
@@ -294,18 +304,31 @@ final class TouchEngine {
         if active.count != lastCount {      // tránh nhảy khi đổi số ngón
             lastCentroid = c; lastCount = active.count
             lastFiltered = filtered(c, reset: true)
+            peakSize = active[0].size; liftX = 0; liftY = 0
+            recent.removeAll()
             if active.count > 1 { cursorDecided = true; bufX = 0; bufY = 0 }
             return
         }
         let dx = c.x - lastCentroid.x, dy = c.y - lastCentroid.y
         travel += hypotf(dx, dy)
         lastCentroid = c
+        recent.append((timestamp, c.x, c.y))
+        if recent.count > 6 { recent.removeFirst() }
         if let menu = ChoiceMenu.active { menu.touchMove(dx); return }   // bảng chọn đang mở: rê ngang = chuyển ô
         let f = filtered(c, reset: false)                   // chuyển động đã khử rung cho con trỏ / cuộn
-        let fdx = Float(f.x - lastFiltered.x), fdy = Float(f.y - lastFiltered.y)
+        var fdx = Float(f.x - lastFiltered.x), fdy = Float(f.y - lastFiltered.y)
         lastFiltered = f
         guard touchMode == .cursor else { return }
-        if active.count == 1 { steer(fdx, fdy, c, timestamp) } else { cursorDecided = true; scroll(fdx, fdy) }
+        if active.count == 1 {
+            // Ngón đang nhấc lên: vùng chạm co lại (đo: ~1,1 → 0,3–0,5 ở khung cuối) và toạ độ lăn theo → con trỏ trôi
+            // vài–10 px ngay lúc nhấc. Giữ chuyển động của khung như vậy lại một nhịp: nhấc tay thật thì bỏ,
+            // còn chạm tiếp (vùng chạm co lại giữa chừng, ~4 % khung) thì cộng vào khung sau.
+            let size = active[0].size
+            peakSize = max(peakSize * 0.97, size)
+            if size < 0.7 * peakSize { liftX += fdx; liftY += fdy; return }
+            fdx += liftX; fdy += liftY; liftX = 0; liftY = 0
+            steer(fdx, fdy, c, timestamp)
+        } else { cursorDecided = true; scroll(fdx, fdy) }
     }
 
     /// Một ngón: nếu chuyển động trông như cú vuốt đã gán hành động thì giữ con trỏ đứng yên,
@@ -320,7 +343,12 @@ final class TouchEngine {
         var decide = mouseButtonDown || elapsed >= 0.45             // quá lâu: chắc chắn không phải cú vuốt
         // Cú vuốt phải đi ≥ 0,3 trong ≤ 0,4 s (~0,75/s). Sau 0,1 s mà còn chậm hơn 0,6/s thì là rê con trỏ:
         // nhả ngay thay vì giữ con trỏ đứng yên tới 0,45 s (gây cảm giác khựng khi rê dọc/ngang).
-        if elapsed >= 0.1, Double(hypotf(ddx, ddy)) / elapsed < 0.6 { decide = true }
+        // 0,135 s (không phải 0,1): cú vuốt của bạn thường đặt ngón nghỉ ~0,1 s rồi mới hất; bản ghi có nhãn: 0,1 s làm
+        // 1/36 cú vuốt bị thả con trỏ giữa chừng, 0,135 s thì 0/36 (con trỏ chờ thêm ~45 ms khi rê chậm).
+        // Ngưỡng "chậm" theo thanh trượt Nhận vuốt: 100 % → 0,6/s (bản ghi tự nhiên: lọt 1/42 cú vuốt, con trỏ chờ ~375 ms);
+        // 0 % → 1,4/s (lọt 4/42 — con trỏ nhích rồi về chỗ cũ —, chờ ~135 ms).
+        let slow = 1.4 - 0.8 * min(max(swipePriority, 0), 1)
+        if elapsed >= 0.135, Double(hypotf(ddx, ddy)) / elapsed < slow { decide = true }
         if !decide {
             let dominant = far >= 2 * min(adx, ady)
             let key = adx > ady ? (ddx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (ddy > 0 ? "SWIPEUP" : "SWIPEDOWN")
@@ -329,13 +357,43 @@ final class TouchEngine {
         }
         guard decide else { return }
         cursorDecided = true
-        moveCursor(bufX, bufY, dt: ts - startTime)
+        releaseHeld(dt: ts - startTime)
+    }
+
+    /// Thả phần chuyển động đã giữ trong lúc chờ phân biệt vuốt. Không nhảy một lần (đo trên bản ghi thật: trung vị
+    /// ~330 px trong một khung hình) mà đuổi theo ngón trong `glidePackets` gói kế tiếp, nhiều trước ít sau.
+    private func releaseHeld(dt: Double) {
+        let px = cursorPixels(bufX, bufY, dt: dt)
         bufX = 0; bufY = 0
+        catchX += px.x; catchY += px.y; catchStep = 0
+    }
+    private static let glidePackets = 8                 // ~120 ms (dò trên bản ghi: 26 → 1 khung nhảy vọt)
+    private var catchX = 0.0, catchY = 0.0, catchStep = TouchEngine.glidePackets
+
+    /// Phần đuổi theo cho gói này (rồi giảm dần).
+    private func takeCatchUp() -> (x: Double, y: Double) {
+        let n = TouchEngine.glidePackets
+        guard catchStep < n else { return (0, 0) }
+        let remaining = Double((n - catchStep) * (n - catchStep + 1) / 2)    // tổng trọng số còn lại
+        let w = Double(n - catchStep) / remaining
+        let part = (x: catchX * w, y: catchY * w)
+        catchX -= part.x; catchY -= part.y
+        catchStep += 1
+        if catchStep >= n { catchX = 0; catchY = 0 }
+        return part
+    }
+
+    /// Nhấc tay khi còn phần đuổi theo: trải nốt trên vài khung tới.
+    private func flushCatchUp() {
+        guard catchStep < TouchEngine.glidePackets, catchX != 0 || catchY != 0 else { return }
+        CursorPump.shared.feed(catchX, catchY, ts: lastFrameTime + 0.045, bounds: screenBounds())
+        catchX = 0; catchY = 0; catchStep = TouchEngine.glidePackets
     }
 
     private func endSession(_ ts: Double) {
         inSession = false
         lastCount = 0
+        flushCatchUp()
         let dur = ts - startTime
         let dx = lastCentroid.x - startCentroid.x, dy = lastCentroid.y - startCentroid.y
         let fingers = maxFingers
@@ -353,22 +411,45 @@ final class TouchEngine {
             return
         }
         if fingers == 1 {
-            let minDist: Float = touchMode == .cursor ? 0.3 : 0.2
+            // 0,22: trên bản ghi thật, 16 % cú vuốt nhanh (105–210 ms) chỉ dài 0,24–0,28 → trước đây (0,30) bị hiểu là rê;
+            // không lượt rê nào dài 0,18–0,30 trong < 0,4 s mà đi thẳng
+            let minDist: Float = touchMode == .cursor ? 0.22 : 0.2
             let maxTime = touchMode == .cursor ? 0.4 : 0.7
             let adx = abs(dx), ady = abs(dy)
-            if dur < maxTime, max(adx, ady) >= minDist, max(adx, ady) >= 2 * min(adx, ady) {
+            if dur < maxTime, max(adx, ady) >= minDist, max(adx, ady) >= 2 * min(adx, ady), !slowedBeforeLift(dur) {
                 let key = adx > ady ? (dx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (dy > 0 ? "SWIPEUP" : "SWIPEDOWN")
+                if cursorDecided, !pressedInSession { restoreCursor() }   // con trỏ đã lỡ chạy: về chỗ lúc chạm
                 // tốc độ vuốt (đơn vị chuẩn hoá / giây): vuốt nhanh thì cuộn xa hơn, như trackpad
                 fire(key, speed: Double(max(adx, ady)) / max(dur, 0.03))
                 return
             }
-            if travel >= 0.04, touchMode == .cursor, !cursorDecided { moveCursor(bufX, bufY, dt: dur) }   // không phải vuốt: trả lại chuyển động đã giữ
+            if travel >= 0.04, touchMode == .cursor, !cursorDecided {   // không phải vuốt: trả lại chuyển động đã giữ (trải ra, không nhảy)
+                releaseHeld(dt: dur); flushCatchUp()
+            }
             else if dur < 0.25, travel < 0.04, !pressedInSession {
                 oneFingerTap(at: ts)
             }
-        } else if fingers == 2, dur < 0.25, travel < 0.06 {
+        } else if fingers == 2, dur < 0.3, travel < 0.06 {     // đo: chạm 2 ngón của bạn kéo dài 255–285 ms
             twoFingerTap(at: ts)
         }
+    }
+
+    /// Cú vuốt chỉ được nhận lúc nhấc tay; nếu trước đó con trỏ đã được thả ra (tưởng là rê) thì chuyển động đó
+    /// là ngoài ý muốn → đưa con trỏ về vị trí lúc bắt đầu chạm (trước khi cuộn, để cuộn đúng cửa sổ dưới con trỏ).
+    private var touchStartPos: CGPoint?
+    private func restoreCursor() {
+        guard let p = touchStartPos else { return }
+        CursorPump.shared.warp(to: p)
+        postMouse(.mouseMoved, at: p)
+    }
+
+    /// Lượt kéo dài (≥ 0,3 s) mà ngón đã chậm lại trước khi nhấc (< 1,5 đơn vị/s, bỏ khung cuối): là rê nhanh rồi dừng,
+    /// không phải cú vuốt. Đo trên bản ghi có nhãn: mọi cú vuốt rời mặt ở ≥ 1,8/s; rê nhanh bị nhầm thì 1,0–1,4/s.
+    private func slowedBeforeLift(_ dur: Double) -> Bool {
+        guard dur >= 0.3, recent.count >= 5 else { return false }
+        let a = recent[recent.count - 5], b = recent[recent.count - 2]
+        let v = Double(hypotf(b.x - a.x, b.y - a.y)) / max(b.t - a.t, 0.004)
+        return v < 1.5
     }
 
     // MARK: Hành động
@@ -484,16 +565,21 @@ final class TouchEngine {
             pressTravel += hypotf(dx, dy)
             if pressTravel < 0.05 { return }
         }
-        // Đường cong tăng tốc kiểu trackpad: chậm = chính xác, nhanh = đi xa
-        let span = max(dt ?? frameDt, 0.004)
+        let px = cursorPixels(dx, dy, dt: dt ?? frameDt)
+        let c = takeCatchUp()
+        CursorPump.shared.feed(px.x + c.x, px.y + c.y, ts: lastFrameTime, bounds: screenBounds())
+    }
+
+    /// Đổi chuyển động ngón (đơn vị chuẩn hoá) thành điểm ảnh màn hình theo đường cong tăng tốc kiểu trackpad:
+    /// chậm = chính xác, nhanh = đi xa. dt: thời gian (giây) mà chuyển động đã diễn ra.
+    private func cursorPixels(_ dx: Float, _ dy: Float, dt: Double) -> (x: Double, y: Double) {
+        let span = max(dt, 0.004)
         let inst = Double(hypotf(dx, dy)) / span                          // đơn vị chuẩn hóa / giây
         // tốc độ làm mượt ~50 ms: gia tốc không nhảy theo độ lệch của từng gói
         cursorSpeed = cursorSpeed == 0 ? inst : cursorSpeed + (inst - cursorSpeed) * (1 - exp(-span / 0.05))
-        let v = cursorSpeed
-        let gain = 0.55 + 2.4 * (1 - exp(-v / 1.4))
+        let gain = 0.55 + 2.4 * (1 - exp(-cursorSpeed / 1.4))
         let k = touchSpeed * 800.0 * gain                                  // điểm ảnh trên một đơn vị chuẩn hóa
-        // trục y của cảm ứng hướng lên, của màn hình hướng xuống
-        CursorPump.shared.feed(Double(dx) * k, -Double(dy) * k, ts: lastFrameTime, bounds: screenBounds())
+        return (Double(dx) * k, -Double(dy) * k)                           // trục y cảm ứng hướng lên, màn hình hướng xuống
     }
 
     // Cuộn kiểu Magic Trackpad: khoá trục + gia tốc, rồi nạp vào ScrollPump (xuất đều theo tần số màn hình).

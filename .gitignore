@@ -5,3 +5,6 @@ build/
 sniffer
 sniffer*.log
 scroll.log
+touchrecorder
+touch*.csv
+recordings/

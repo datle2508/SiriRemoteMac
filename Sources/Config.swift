@@ -115,6 +115,7 @@ var tapClick = false
 var scrollMomentum = true
 var clickSteady = true
 var scrollSmooth = 0.55          // 0 = bám tay tuyệt đối (không nội suy) … 1 = mượt nhất (trễ 80 ms)
+var swipePriority = 1.0          // 1 = chờ chắc chắn không phải vuốt mới cho con trỏ chạy … 0 = con trỏ chạy sớm
 var touchFamilies: Set<Int32> = [160, 145]   // 160: Siri Remote đời 1 (đo trên máy thật), 145: đời 3
 var mouseButtonDown = false      // Controller đặt khi nút touchpad đang được nhấn (để kéo thả bằng cảm ứng)
 
@@ -134,7 +135,7 @@ var appDisabled: [String: Set<String>] = [:]     // nút bị tắt ("none") ri�
 /// Các khóa là tùy chọn (không phải nút bấm / cử chỉ).
 let settingKeys: Set<String> = ["holdtime", "doubletime", "remotemodel", "navinvert", "touchmode",
                                 "touchspeed", "scrollspeed", "naturalscroll", "tapclick", "touchfamily",
-                                "scrollmomentum", "clicksteady", "scrollsmooth", "navduration", "navdistance", "language"]
+                                "scrollmomentum", "clicksteady", "scrollsmooth", "swipepriority", "navduration", "navdistance", "language"]
 
 /// Đọc file cấu hình (qua ConfigFile) → bản đồ nút → hành động; cập nhật các tùy chọn toàn cục.
 func loadMap() -> [String: Action] {
@@ -153,6 +154,7 @@ func loadMap() -> [String: Action] {
     if let t = number("touchspeed", 0.3...5.0) { touchSpeed = t }
     if let t = number("scrollspeed", 0.2...4.0) { scrollSpeed = t }
     if let t = number("scrollsmooth", 0...1) { scrollSmooth = t }
+    if let t = number("swipepriority", 0...1) { swipePriority = t }
     if let t = number("navduration", 0.15...1.0) { navDuration = t }
     if let t = number("navdistance", 0.4...6.0) { navDistance = t }
     if let v = take("touchmode") { touchMode = TouchMode(rawValue: v.lowercased()) ?? .cursor }

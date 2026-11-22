@@ -203,6 +203,7 @@ File `~/.siriremote.json` (tự tạo lần chạy đầu). Dùng **tên nút** 
 | `touchmode` | `cursor` / `swipe` / `off` | `cursor` |
 | `touchspeed`, `scrollspeed` | Tốc độ con trỏ / cuộn | `1.5`, `1.0` |
 | `scrollsmooth` | Độ mượt con trỏ và cuộn, `0`–`1` | `0.55` |
+| `swipepriority` | Nhận vuốt 1 ngón: `1` = chờ chắc chắn không phải cú vuốt mới cho con trỏ chạy (ít nhầm), `0` = con trỏ chạy ngay (cú vuốt đôi khi làm con trỏ nhích rồi về chỗ cũ) | `1` |
 | `naturalscroll`, `scrollmomentum`, `tapclick`, `clicksteady` | `1` bật / `0` tắt | `1`, `1`, `0`, `1` |
 | `touchfamily` | Mã thiết bị cảm ứng, cách nhau dấu phẩy | `160,145` |
 | `remotemodel` | `auto` / `gen1` / `gen23` | `auto` |
@@ -252,16 +253,33 @@ Sources/
   Touch.swift                     cảm ứng MultitouchSupport: con trỏ, cuộn, cử chỉ, lọc One Euro
   CursorPump.swift                di chuột theo khung hình (nội suy theo dấu thời gian touchpad)
   ScrollPump.swift                cuộn theo khung hình, quán tính, cú hất
+  TouchPath.swift                 đường đi của ngón theo thời gian (dùng chung cho hai bơm)
   Action.swift                    các hành động (phím, media, zoom thông minh…)
   ChoiceMenu.swift                bảng chọn kiểu Apple TV (menu nguồn, chế độ cảm ứng)
   Settings.swift                  cửa sổ Cài đặt
   Illustrations.swift             hình minh hoạ và animation (Core Animation)
   Config.swift, Localization.swift
+Tests/                            test tự động (chạy bằng test.sh)
 build_app.sh                      đóng gói .app và .dmg
+test.sh                           chạy test
 icon/                             icon app (SVG + PNG 1024)
 docs/images/                      ảnh chụp cho README
 tools/                            công cụ nghiên cứu sự kiện
 ```
+
+### Test tự động
+
+```bash
+./test.sh
+```
+
+Không cần remote, không di chuột hay cuộn thật (hai bơm chạy bằng đồng hồ giả, sự kiện được ghi lại thay vì gửi đi). Gồm:
+
+- **Unit test**: bộ lọc One Euro, nội suy `TouchPath`, đọc hành động (`Action.parse`), tên nút ↔ mã HID, cấu hình mặc định.
+- **Hành vi hai bơm**: thứ tự pha cuộn giống trackpad (mayBegin → began → ended → quán tính), tổng quãng không mất điểm ảnh, quán tính giảm theo e^(−3,1t), dừng khi chạm lại, kẹp con trỏ trong màn hình, `warp`.
+- **Độ mượt**: phát lại nét rê có nhịp 66,7 Hz và rung toạ độ như remote đời 1, đo độ khựng trên từng khung hình 60 Hz. Hiện tại: cách cũ khoảng 32 %, qua bơm và bộ lọc khoảng 4 % (con trỏ) và 6 % (cuộn). Sửa code làm độ khựng vượt ngưỡng thì test báo lỗi.
+
+### Tuỳ chọn dòng lệnh
 
 - `SiriRemoteMac.app/Contents/MacOS/SiriRemoteMac --settings`: mở thẳng cửa sổ Cài đặt.
 - `SiriRemoteMac.app/Contents/MacOS/SiriRemoteMac --screenshots docs/images`: chụp lại toàn bộ ảnh trong README rồi thoát (chụp cửa sổ của chính app, không cần quyền ghi màn hình). Thoát bản đang chạy trước, và bấm một nút trên remote để nhãn trạng thái hiện *Remote đã kết nối*.
@@ -269,6 +287,13 @@ tools/                            công cụ nghiên cứu sự kiện
   - `Sniffer.swift`: nghe gói HID của remote (`swiftc -O tools/Sniffer.swift -o sniffer && ./sniffer | tee sniffer.log`).
   - `ScrollSniffer.swift`: ghi mọi trường của sự kiện cuộn, để so cú vuốt trackpad thật với cú vuốt giả lập.
   - `GestureSniffer.swift`: ghi các sự kiện cử chỉ (zoom thông minh, phóng to…).
+  - `TouchRecorder.swift` + `analyze.sh`: ghi khung cảm ứng thật của remote rồi phát lại qua bộ xử lý của app để đo độ khựng và dò tham số theo cách vuốt của bạn:
+    ```bash
+    swiftc -O tools/TouchRecorder.swift -o touchrecorder
+    ./touchrecorder 120 touch.csv               # dùng remote như bình thường trong 2 phút
+    ./touchrecorder 0 touch.csv guided          # có giọng đọc hướng dẫn từng thao tác → đo độ chính xác nhận diện
+    tools/analyze.sh touch.csv 0.77 0.76       # tốc độ con trỏ, độ mượt đang dùng
+    ```
 
 ## Ngôn ngữ / Language
 
