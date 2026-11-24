@@ -140,7 +140,7 @@ final class Controller {
                 holdFired.remove(key)
                 if let hold = hold {
                     holdTimers[key]?.invalidate()
-                    holdTimers[key] = Timer.scheduledTimer(withTimeInterval: holdDelaySeconds, repeats: false) { [weak self] _ in
+                    holdTimers[key] = commonTimer(holdDelaySeconds, repeats: false) { [weak self] _ in
                         self?.holdTimers[key] = nil
                         self?.holdFired.insert(key)
                         if case .media(let k) = hold, k == 19 || k == 20 { self?.startSeek(k) } else { hold.run() }
@@ -170,7 +170,7 @@ final class Controller {
             dbl.run()
             return
         }
-        doubleTimers[key] = Timer.scheduledTimer(withTimeInterval: doubleDelaySeconds, repeats: false) { [weak self] _ in
+        doubleTimers[key] = commonTimer(doubleDelaySeconds, repeats: false) { [weak self] _ in
             self?.doubleTimers[key] = nil
             tap?.run()
         }
@@ -185,7 +185,7 @@ final class Controller {
         seekKey = key
         if debugLog { log("SEEK start \(key) accessibility=\(AXIsProcessTrusted())") }
         postMediaKey(key, down: true, isRepeat: false)
-        seekTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+        seekTimer = commonTimer(0.1, repeats: true) { _ in
             postMediaKey(key, down: true, isRepeat: true)
         }
     }
@@ -217,8 +217,15 @@ final class Controller {
                     wheel1: step, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
         }
         fire()
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { _ in fire() }
+        scrollTimer = commonTimer(0.016, repeats: true) { _ in fire() }
     }
+}
+
+/// Timer chạy cả khi menu đang mở (run loop ở chế độ theo dõi menu), như nút remote ở trên.
+private func commonTimer(_ interval: TimeInterval, repeats: Bool, _ block: @escaping (Timer) -> Void) -> Timer {
+    let t = Timer(timeInterval: interval, repeats: repeats, block: block)
+    RunLoop.main.add(t, forMode: .common)
+    return t
 }
 
 let controller = Controller()

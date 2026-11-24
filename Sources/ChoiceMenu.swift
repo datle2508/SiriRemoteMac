@@ -4,7 +4,7 @@
 // - Chế độ cảm ứng (giữ Siri): Con trỏ / Vuốt-chạm / Tắt — thấy trước rồi mới đổi.
 //
 // Điều khiển bằng remote: vuốt trái/phải (hoặc ←/→ của click ring, hoặc bấm Siri để xoay vòng) chuyển ô,
-// bấm touchpad / Play-Pause để chọn, Menu / Back / Home để hủy. Bấm chuột cũng được. Tự đóng sau 10 giây.
+// bấm touchpad (Play-Pause khi đã chiếm quyền remote) để chọn, Menu / Back / Home để hủy. Bấm chuột cũng được. Tự đóng sau 10 giây.
 
 import Cocoa
 import QuartzCore
@@ -231,7 +231,9 @@ final class ChoiceMenu {
     func button(_ name: String) -> Bool {
         switch name {
         case "volup", "voldown", "mute": return false
-        case "touchpad", "select", "playpause": confirm()
+        // Play/Pause chỉ xác nhận khi đã chiếm quyền remote; không thì macOS cũng nhận → nhạc phát/dừng theo
+        case "playpause": if controller.seize { confirm() } else { return false }
+        case "touchpad", "select": confirm()
         case "menu", "back", "home", "tv": dismiss()
         case "left": move(-1)
         case "right": move(1)

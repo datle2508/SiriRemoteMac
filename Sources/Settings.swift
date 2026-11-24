@@ -241,6 +241,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
         window.contentView?.staggerIn([currentHost])
     }
 
+    /// Quay lại cửa sổ (ví dụ sau khi sửa tay file cấu hình): đọc lại file nếu nó đã đổi, kẻo lần lưu sau ghi đè mất.
+    func windowDidBecomeKey(_ notification: Notification) {
+        let fresh = ConfigFile.load()
+        guard fresh.global != cfg.global || fresh.apps != cfg.apps || fresh.custom != cfg.custom else { return }
+        cfg = fresh
+        if let c = current, cfg.apps[c] == nil { current = nil }
+        reload()
+    }
+
     private var currentHost: NSStackView { [buttonsHost, touchHost, advancedHost][currentPage] }
 
     private func remoteEvent(_ name: String) {
