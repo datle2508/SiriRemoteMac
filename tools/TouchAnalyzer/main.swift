@@ -50,7 +50,7 @@ func sessions(_ frames: [Frame]) -> [Session] {
     return out
 }
 
-let swipeMinDist = 0.22          // như TouchEngine.endSession (chế độ con trỏ)
+let swipeMinDist = GestureRules.cursor.swipeDist
 
 enum Kind: String { case swipe = "vuốt", nearSwipe = "vuốt hụt", cursor = "rê con trỏ", tap = "chạm", scroll = "cuộn 2 ngón", other = "khác" }
 
@@ -76,7 +76,9 @@ func f(_ x: Double, _ d: Int = 2) -> String { String(format: "%.\(d)f", x) }
 // MARK: - Phát lại một lượt rê con trỏ
 
 /// Thời điểm (giây từ lúc chạm) mà TouchEngine.steer thả con trỏ (cả 4 hướng vuốt đều được gán như cấu hình hiện tại).
-func steerDecision(_ s: Session, holdMax: Double = 0.45, slowSpeed: Double = 0.6, minTime: Double = 0.135) -> Double? {
+func steerDecision(_ s: Session, holdMax: Double = GestureRules.holdMax,
+                   slowSpeed: Double = GestureRules.slowSpeed(priority: swipePriority),
+                   minTime: Double = GestureRules.holdMinTime) -> Double? {
     let s0 = s.samples[0]
     for p in s.samples.dropFirst() where p.n == 1 {
         let el = p.ts - s0.ts
@@ -109,8 +111,8 @@ enum Mode { case direct, pump(smooth: Double, delay: Double) }
 
 /// hold: mô phỏng việc giữ con trỏ chờ phân biệt vuốt (rồi thả cả đoạn một lúc) như app hiện tại;
 /// holdRelease: thay vì thả một lúc, rải phần đã giữ ra theo thời gian (đề xuất).
-func replayCursor(_ s: Session, mode: Mode, touchSpeed: Double, hold: Bool, holdMax: Double = 0.45,
-                  slowSpeed: Double = 0.6, minTime: Double = 0.135, spread: Bool = false, glideN: Int = 7) -> (Double, Int, Int) {
+func replayCursor(_ s: Session, mode: Mode, touchSpeed: Double, hold: Bool, holdMax: Double = GestureRules.holdMax,
+                  slowSpeed: Double = GestureRules.slowSpeed(priority: swipePriority), minTime: Double = GestureRules.holdMinTime, spread: Bool = false, glideN: Int = 7) -> (Double, Int, Int) {
     let smp = s.samples.filter { $0.n == 1 }
     guard smp.count > 6 else { return (0, 0, 0) }
     let decideAt = hold ? (steerDecision(s, holdMax: holdMax, slowSpeed: slowSpeed, minTime: minTime) ?? .infinity) : 0
@@ -204,6 +206,7 @@ func filterLag(smooth: Double, speed: Double) -> Double {
 
 // MARK: - Chạy
 
+_ = loadMap()                    // đọc cấu hình thật (thanh trượt Nhận vuốt…) như app
 let path = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "touch.csv"
 let touchSpeedCfg = CommandLine.arguments.count > 2 ? Double(CommandLine.arguments[2]) ?? 0.77 : 0.77
 let smoothCfg = CommandLine.arguments.count > 3 ? Double(CommandLine.arguments[3]) ?? 0.76 : 0.76
@@ -346,33 +349,19 @@ do {
 
 // MARK: - Độ chính xác (chỉ khi có file nhãn .phases từ bản ghi có hướng dẫn)
 
-struct Rules {
-    var tapDur = 0.25, tapTravel = 0.04
-    var swipeDist = 0.22, swipeTime = 0.4, swipeDominance = 2.0
-    var twoDur = 0.3, twoTravel = 0.06
-    var endSpeedRule = true          // ≥ 0,3 s mà chậm lại < 1,5/s trước khi nhấc → không phải vuốt
-}
-
-func slowedBeforeLift(_ s: Session) -> Bool {
-    let m = s.samples
-    guard s.dur + 0.015 >= 0.3, m.count >= 5 else { return false }
-    let a = m[m.count - 5], b = m[m.count - 2]
-    return hypot(b.x - a.x, b.y - a.y) / max(b.ts - a.ts, 0.004) < 1.5
-}
+typealias Rules = GestureRules      // luật của app (Sources/GestureRules.swift), không chép lại ở đây
 
 /// Cách TouchEngine.endSession hiểu một lượt chạm (chế độ con trỏ, cả 4 hướng vuốt đã gán).
 func appSees(_ s: Session, _ r: Rules) -> String {
     let dur = s.dur + 0.015                          // app tính tới khung nhấc tay
-    if s.maxFingers >= 2 {
-        return dur < r.twoDur && s.travel < r.twoTravel ? "twotap" : (s.travel >= 0.02 ? "scroll" : "none")
+    let end = r.classifyEnd(fingers: s.maxFingers, dur: dur, dx: s.dx, dy: s.dy, travel: s.travel,
+                            recent: s.samples.map { ($0.ts, $0.x, $0.y) })
+    switch end {
+    case .swipe(let key): return key.lowercased()
+    case .tap: return "tap"
+    case .twoFingerTap: return "twotap"
+    case .none: return s.maxFingers >= 2 ? (s.travel >= 0.02 ? "scroll" : "none") : (s.travel >= 0.04 ? "cursor" : "none")
     }
-    let adx = abs(s.dx), ady = abs(s.dy), far = max(adx, ady)
-    if dur < r.swipeTime, far >= r.swipeDist, far >= r.swipeDominance * min(adx, ady), !(r.endSpeedRule && slowedBeforeLift(s)) {
-        return adx > ady ? (s.dx > 0 ? "swiperight" : "swipeleft") : (s.dy > 0 ? "swipeup" : "swipedown")
-    }
-    if s.travel >= r.tapTravel { return "cursor" }
-    if dur < r.tapDur, s.travel < r.tapTravel { return "tap" }
-    return s.travel >= 0.04 ? "cursor" : "none"
 }
 
 func expected(_ label: String) -> Set<String> {

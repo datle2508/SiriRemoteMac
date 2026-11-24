@@ -340,15 +340,10 @@ final class TouchEngine {
         let adx = abs(ddx), ady = abs(ddy)
         let far = max(adx, ady)
         let elapsed = ts - startTime
-        var decide = mouseButtonDown || elapsed >= 0.45             // quá lâu: chắc chắn không phải cú vuốt
-        // Cú vuốt phải đi ≥ 0,3 trong ≤ 0,4 s (~0,75/s). Sau 0,1 s mà còn chậm hơn 0,6/s thì là rê con trỏ:
-        // nhả ngay thay vì giữ con trỏ đứng yên tới 0,45 s (gây cảm giác khựng khi rê dọc/ngang).
-        // 0,135 s (không phải 0,1): cú vuốt của bạn thường đặt ngón nghỉ ~0,1 s rồi mới hất; bản ghi có nhãn: 0,1 s làm
-        // 1/36 cú vuốt bị thả con trỏ giữa chừng, 0,135 s thì 0/36 (con trỏ chờ thêm ~45 ms khi rê chậm).
-        // Ngưỡng "chậm" theo thanh trượt Nhận vuốt: 100 % → 0,6/s (bản ghi tự nhiên: lọt 1/42 cú vuốt, con trỏ chờ ~375 ms);
-        // 0 % → 1,4/s (lọt 4/42 — con trỏ nhích rồi về chỗ cũ —, chờ ~135 ms).
-        let slow = 1.4 - 0.8 * min(max(swipePriority, 0), 1)
-        if elapsed >= 0.135, Double(hypotf(ddx, ddy)) / elapsed < slow { decide = true }
+        var decide = mouseButtonDown || elapsed >= GestureRules.holdMax     // quá lâu: chắc chắn không phải cú vuốt
+        // Còn chậm sau một nhịp ngắn thì là rê con trỏ: nhả ngay thay vì giữ đứng yên (cảm giác khựng). Xem GestureRules.
+        if elapsed >= GestureRules.holdMinTime,
+           Double(hypotf(ddx, ddy)) / elapsed < GestureRules.slowSpeed(priority: swipePriority) { decide = true }
         if !decide {
             let dominant = far >= 2 * min(adx, ady)
             let key = adx > ady ? (ddx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (ddy > 0 ? "SWIPEUP" : "SWIPEDOWN")
@@ -410,27 +405,22 @@ final class TouchEngine {
             finishScroll()
             return
         }
-        if fingers == 1 {
-            // 0,22: trên bản ghi thật, 16 % cú vuốt nhanh (105–210 ms) chỉ dài 0,24–0,28 → trước đây (0,30) bị hiểu là rê;
-            // không lượt rê nào dài 0,18–0,30 trong < 0,4 s mà đi thẳng
-            let minDist: Float = touchMode == .cursor ? 0.22 : 0.2
-            let maxTime = touchMode == .cursor ? 0.4 : 0.7
-            let adx = abs(dx), ady = abs(dy)
-            if dur < maxTime, max(adx, ady) >= minDist, max(adx, ady) >= 2 * min(adx, ady), !slowedBeforeLift(dur) {
-                let key = adx > ady ? (dx > 0 ? "SWIPERIGHT" : "SWIPELEFT") : (dy > 0 ? "SWIPEUP" : "SWIPEDOWN")
-                if cursorDecided, !pressedInSession { restoreCursor() }   // con trỏ đã lỡ chạy: về chỗ lúc chạm
-                // tốc độ vuốt (đơn vị chuẩn hoá / giây): vuốt nhanh thì cuộn xa hơn, như trackpad
-                fire(key, speed: Double(max(adx, ady)) / max(dur, 0.03))
-                return
-            }
-            if travel >= 0.04, touchMode == .cursor, !cursorDecided {   // không phải vuốt: trả lại chuyển động đã giữ (trải ra, không nhảy)
+        let rules = touchMode == .cursor ? GestureRules.cursor : GestureRules.swipe
+        let end = rules.classifyEnd(fingers: fingers, dur: dur, dx: Double(dx), dy: Double(dy), travel: Double(travel),
+                                    recent: recent.map { ($0.t, Double($0.x), Double($0.y)) })
+        switch end {
+        case .swipe(let key):
+            if cursorDecided, !pressedInSession { restoreCursor() }   // con trỏ đã lỡ chạy: về chỗ lúc chạm
+            // tốc độ vuốt (đơn vị chuẩn hoá / giây): vuốt nhanh thì cuộn xa hơn, như trackpad
+            fire(key, speed: Double(max(abs(dx), abs(dy))) / max(dur, 0.03))
+        case .tap:
+            if !pressedInSession { oneFingerTap(at: ts) }
+        case .twoFingerTap:
+            twoFingerTap(at: ts)
+        case .none:
+            if fingers == 1, travel >= 0.04, touchMode == .cursor, !cursorDecided {   // không phải vuốt: trả lại chuyển động đã giữ (trải ra, không nhảy)
                 releaseHeld(dt: dur); flushCatchUp()
             }
-            else if dur < 0.25, travel < 0.04, !pressedInSession {
-                oneFingerTap(at: ts)
-            }
-        } else if fingers == 2, dur < 0.3, travel < 0.06 {     // đo: chạm 2 ngón của bạn kéo dài 255–285 ms
-            twoFingerTap(at: ts)
         }
     }
 
@@ -441,15 +431,6 @@ final class TouchEngine {
         guard let p = touchStartPos else { return }
         CursorPump.shared.warp(to: p)
         postMouse(.mouseMoved, at: p)
-    }
-
-    /// Lượt kéo dài (≥ 0,3 s) mà ngón đã chậm lại trước khi nhấc (< 1,5 đơn vị/s, bỏ khung cuối): là rê nhanh rồi dừng,
-    /// không phải cú vuốt. Đo trên bản ghi có nhãn: mọi cú vuốt rời mặt ở ≥ 1,8/s; rê nhanh bị nhầm thì 1,0–1,4/s.
-    private func slowedBeforeLift(_ dur: Double) -> Bool {
-        guard dur >= 0.3, recent.count >= 5 else { return false }
-        let a = recent[recent.count - 5], b = recent[recent.count - 2]
-        let v = Double(hypotf(b.x - a.x, b.y - a.y)) / max(b.t - a.t, 0.004)
-        return v < 1.5
     }
 
     // MARK: Hành động

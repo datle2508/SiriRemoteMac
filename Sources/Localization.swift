@@ -20,7 +20,8 @@ func TF(_ vi: String, _ args: CVarArg...) -> String {
     String(format: T(vi), arguments: args)
 }
 
-private let englishStrings: [String: String] = [
+/// Không để private: test đọc bảng này (khoá trùng trong dictionary literal làm app sập lúc chạy).
+let englishStrings: [String: String] = [
     // Menu thanh trạng thái
     "Khởi động cùng macOS": "Launch at login",
     "Chiếm quyền remote (khi gán lại Vol/Play)": "Seize remote (when remapping Vol/Play)",

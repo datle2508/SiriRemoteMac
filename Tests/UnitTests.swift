@@ -192,6 +192,67 @@ func runUnitTests() {
         expect(!FileManager.default.fileExists(atPath: path + ".broken"))
     }
 
+    group("Bản dịch tiếng Anh")
+
+    test("bảng chuỗi tiếng Anh nạp được (khoá trùng làm app sập khi giao diện là English)") {
+        expect(englishStrings["Thoát"] == "Quit")
+    }
+
+    group("Nhận dạng cử chỉ lúc nhấc tay (GestureRules)")
+
+    /// Lượt một ngón đi đều từ (0,0) tới (dx, dy) trong dur giây, mẫu mỗi 15 ms.
+    func line(_ dx: Double, _ dy: Double, _ dur: Double) -> [(t: Double, x: Double, y: Double)] {
+        let n = max(Int(dur / 0.015), 1)
+        return (0...n).map { i in let u = Double(i) / Double(n); return (u * dur, dx * u, dy * u) }
+    }
+    func end(_ dx: Double, _ dy: Double, _ dur: Double, fingers: Int = 1,
+             _ r: GestureRules = .cursor) -> TouchEnd {
+        r.classifyEnd(fingers: fingers, dur: dur, dx: dx, dy: dy, travel: hypot(dx, dy), recent: line(dx, dy, dur))
+    }
+
+    test("vuốt nhanh, thẳng: nhận đúng hướng") {
+        expect(end(0.3, 0.02, 0.2) == .swipe("SWIPERIGHT"))
+        expect(end(-0.3, 0, 0.2) == .swipe("SWIPELEFT"))
+        expect(end(0, 0.25, 0.15) == .swipe("SWIPEUP"))
+        expect(end(0.05, -0.4, 0.25) == .swipe("SWIPEDOWN"))
+    }
+
+    test("không phải vuốt: ngắn, chậm, hay chéo") {
+        expect(end(0.2, 0, 0.2) == .none, "ngắn hơn 0,22")
+        expect(end(0.4, 0, 0.45) == .none, "lâu hơn 0,4 s")
+        expect(end(0.3, 0.2, 0.2) == .none, "chéo")
+    }
+
+    test("rê nhanh rồi dừng trước khi nhấc: không phải vuốt") {
+        // 0,35 s: đi nhanh 0,3 trong 0,25 s rồi gần như đứng yên 0,1 s
+        var r = line(0.3, 0, 0.25)
+        for i in 1...7 { r.append((0.25 + Double(i) * 0.015, 0.3 + Double(i) * 0.001, 0)) }
+        let e = GestureRules.cursor.classifyEnd(fingers: 1, dur: 0.355, dx: 0.307, dy: 0, travel: 0.307, recent: r)
+        expect(e == .none, "\(e)")
+        expect(end(0.6, 0, 0.35) == .swipe("SWIPERIGHT"), "vẫn nhanh (≥ 1,5/s) tới lúc nhấc thì là vuốt")
+    }
+
+    test("chạm một ngón / hai ngón") {
+        expect(end(0.01, 0.01, 0.1) == .tap)
+        expect(end(0.01, 0, 0.3) == .none, "giữ lâu không phải chạm")
+        expect(end(0.02, 0, 0.25, fingers: 2) == .twoFingerTap)
+        expect(end(0.02, 0, 0.35, fingers: 2) == .none)
+        expect(end(0.02, 0, 0.1, fingers: 3) == .none)
+    }
+
+    test("chế độ vuốt/chạm: nhận vuốt dài hơn, chậm hơn") {
+        expect(end(0.21, 0, 0.2, .swipe) == .swipe("SWIPERIGHT"))
+        expect(end(0.21, 0, 0.2) == .none)
+        expect(end(0.8, 0, 0.5, .swipe) == .swipe("SWIPERIGHT"))
+        expect(end(0.8, 0, 0.5) == .none)
+    }
+
+    test("thanh trượt Nhận vuốt: 100 % → 0,6/s, 0 % → 1,4/s, kẹp ngoài 0…1") {
+        expectNear(GestureRules.slowSpeed(priority: 1), 0.6, tol: 1e-9)
+        expectNear(GestureRules.slowSpeed(priority: 0), 1.4, tol: 1e-9)
+        expectNear(GestureRules.slowSpeed(priority: 5), 0.6, tol: 1e-9)
+    }
+
     test("mặc định: mọi hành động trong defaultMap đều đọc được") {
         for (k, v) in defaultMap where !settingKeys.contains(k) {
             expect(Action.parse(v) != nil, "\(k): \(v)")
