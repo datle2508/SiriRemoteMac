@@ -160,6 +160,38 @@ func runUnitTests() {
         expect(canonicalKey("SwipeUp") == "swipeup")
     }
 
+    group("File cấu hình")
+
+    test("file hỏng (gõ tay sai cú pháp): cất bản cũ sang .broken trước khi ghi đè") {
+        let dir = NSTemporaryDirectory() + "siriremote-test-\(UUID().uuidString)"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = dir + "/cfg.json"
+        let broken = "{ \"home\": \"media:next\", \"apps\": "
+        try? broken.write(toFile: path, atomically: true, encoding: .utf8)
+        var c = ConfigFile.load(from: path)
+        expect(c.unreadable)
+        c.global["touchmode"] = "swipe"
+        c.save(to: path)
+        expect((try? String(contentsOfFile: path + ".broken", encoding: .utf8)) == broken, "bản cũ phải còn nguyên")
+        let again = ConfigFile.load(from: path)
+        expect(!again.unreadable && again.global["touchmode"] == "swipe")
+    }
+
+    test("file đúng: ghi rồi đọc lại giữ nguyên, không tạo .broken") {
+        let dir = NSTemporaryDirectory() + "siriremote-test-\(UUID().uuidString)"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = dir + "/cfg.json"
+        var c = ConfigFile.load(from: path)                 // chưa có file: mặc định, không phải "hỏng"
+        expect(!c.unreadable)
+        c.apps["com.apple.Safari"] = ["menu": "key:cmd+["]
+        c.save(to: path)
+        let back = ConfigFile.load(from: path)
+        expect(back.apps["com.apple.Safari"]?["menu"] == "key:cmd+[")
+        expect(!FileManager.default.fileExists(atPath: path + ".broken"))
+    }
+
     test("mặc định: mọi hành động trong defaultMap đều đọc được") {
         for (k, v) in defaultMap where !settingKeys.contains(k) {
             expect(Action.parse(v) != nil, "\(k): \(v)")

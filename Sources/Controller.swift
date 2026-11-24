@@ -38,7 +38,9 @@ final class Controller {
         IOHIDManagerSetDeviceMatching(m, match as CFDictionary)
         IOHIDManagerRegisterDeviceMatchingCallback(m, onDeviceAdded, nil)
         IOHIDManagerRegisterDeviceRemovalCallback(m, onDeviceRemoved, nil)
-        IOHIDManagerScheduleWithRunLoop(m, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        // commonModes (không phải defaultMode): khi một menu đang mở, run loop chạy ở chế độ theo dõi menu;
+        // chỉ nghe ở defaultMode thì nút remote (nhấn touchpad = click) bị giữ lại tới khi menu đóng.
+        IOHIDManagerScheduleWithRunLoop(m, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         IOHIDManagerOpen(m, IOOptionBits(kIOHIDOptionsTypeNone))
         manager = m
     }
@@ -51,7 +53,7 @@ final class Controller {
         for d in remotes { close(d) }
         remotes.removeAll()
         if let m = manager {
-            IOHIDManagerUnscheduleFromRunLoop(m, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+            IOHIDManagerUnscheduleFromRunLoop(m, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
             IOHIDManagerClose(m, IOOptionBits(kIOHIDOptionsTypeNone))
         }
         manager = nil
@@ -75,7 +77,7 @@ final class Controller {
     }
 
     private func close(_ d: IOHIDDevice) {
-        IOHIDDeviceUnscheduleFromRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDDeviceUnscheduleFromRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         IOHIDDeviceClose(d, IOOptionBits(kIOHIDOptionsTypeNone))
     }
 
@@ -87,7 +89,7 @@ final class Controller {
         detectedProductID = (IOHIDDeviceGetProperty(d, kIOHIDProductIDKey as CFString) as? Int) ?? 0
         if debugLog { log("REMOTE \(name) productID=0x\(String(detectedProductID, radix: 16))") }
         IOHIDDeviceRegisterInputValueCallback(d, onValue, nil)
-        IOHIDDeviceScheduleWithRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDDeviceScheduleWithRunLoop(d, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         remotes.append(d)
         DispatchQueue.main.async { appDelegate.refresh() }
         // Thiết bị cảm ứng xuất hiện chậm hơn nút bấm một chút: thử nạp lại vài lần.
@@ -99,6 +101,8 @@ final class Controller {
     func removed(_ d: IOHIDDevice) {
         guard let i = remotes.firstIndex(where: { $0 === d }) else { return }
         remotes.remove(at: i)
+        // Mất kết nối giữa lúc đang nhấn touchpad: nhả chuột, kẻo macOS tưởng nút trái vẫn giữ (kéo nhầm cửa sổ)
+        if mouseButtonDown { postMouse(.leftMouseUp, at: CGEvent(source: nil)?.location ?? .zero) }
         mouseButtonDown = false
         touchEngine.stop()
         setScroll(0)

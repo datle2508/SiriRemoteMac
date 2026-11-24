@@ -857,6 +857,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuDelegate {
         commit()
     }
 
+    /// Chế độ vừa đổi bằng remote / thanh menu (file đã được ghi): giữ bản cấu hình của cửa sổ cho khớp.
+    func noteTouchMode(_ mode: TouchMode) { cfg.global["touchmode"] = mode.rawValue }
+
     /// Chọn chế độ bằng thẻ: chỉ đổi trạng thái thẻ (có animation), không dựng lại cả trang.
     private func selectTouchMode(_ id: String) {
         cfg.global["touchmode"] = id

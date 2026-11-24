@@ -204,12 +204,13 @@ struct ConfigFile {
     var apps: [String: [String: String]] = [:]
     var custom: [String: String] = [:]
     var seeded: [String] = []
+    var unreadable = false          // file có nhưng không đọc được (JSON sai): save() phải giữ lại bản cũ
 
-    static func load() -> ConfigFile {
+    static func load(from path: String = configPath) -> ConfigFile {
         var c = ConfigFile()
-        let fileData = FileManager.default.contents(atPath: configPath)
+        let fileData = FileManager.default.contents(atPath: path)
         let parsed = fileData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        if fileData != nil && parsed == nil { log("File cấu hình sai định dạng, dùng mặc định") }
+        if fileData != nil && parsed == nil { log("File cấu hình sai định dạng, dùng mặc định"); c.unreadable = true }
         registerCustomButtons((parsed?["custombuttons"] as? [String: Any]) ?? [:])
         for (k, v) in defaultMap { c.global[canonicalKey(k)] = v }
         if let obj = parsed {
@@ -232,13 +233,20 @@ struct ConfigFile {
         return c
     }
 
-    func save() {
+    func save(to path: String = configPath) {
+        // File gõ tay bị lỗi cú pháp: cất bản cũ sang .broken trước khi ghi đè, để không mất cấu hình đã làm
+        if unreadable, FileManager.default.fileExists(atPath: path) {
+            let backup = path + ".broken"
+            try? FileManager.default.removeItem(atPath: backup)
+            try? FileManager.default.copyItem(atPath: path, toPath: backup)
+            log("Đã lưu file cấu hình lỗi sang \(backup)")
+        }
         var dict: [String: Any] = global
         if !apps.isEmpty { dict["apps"] = apps }
         if !custom.isEmpty { dict["custombuttons"] = custom }
         if !seeded.isEmpty { dict["seededapps"] = seeded }
         guard let d = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) else { return }
-        try? d.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+        try? d.write(to: URL(fileURLWithPath: path), options: .atomic)
     }
 }
 

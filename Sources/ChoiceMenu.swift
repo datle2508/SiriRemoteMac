@@ -257,6 +257,7 @@ func setTouchMode(_ mode: TouchMode) {
     c.global["touchmode"] = mode.rawValue
     c.save()
     controller.reloadMap()
+    appDelegate.touchModeChanged(mode)
     NSSound(named: NSSound.Name(mode == .cursor ? "Pop" : "Tink"))?.play()
     appDelegate.flash(mode.title)
     appDelegate.refresh()

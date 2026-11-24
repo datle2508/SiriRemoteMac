@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         var modeMenuItems: [NSMenuItem] = []
         for mode in [TouchMode.cursor, .swipe, .off] {
-            let mi = entry(mode.title, #selector(setTouchMode(_:)))
+            let mi = entry(mode.title, #selector(pickTouchMode(_:)))
             mi.representedObject = mode.rawValue
             modeItems[mode] = mi
             modeMenuItems.append(mi)
@@ -141,14 +141,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem.state = (inApp && SMAppService.mainApp.status == .enabled) ? .on : .off
     }
 
-    @objc private func setTouchMode(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String else { return }
-        var c = ConfigFile.load()
-        c.global["touchmode"] = raw
-        c.save()
-        controller.reloadMap()
-        refresh()
+    @objc private func pickTouchMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = TouchMode(rawValue: raw) else { return }
+        setTouchMode(mode)
     }
+    /// Chế độ cảm ứng vừa đổi từ ngoài cửa sổ Cài đặt: cập nhật bản cấu hình cửa sổ đang giữ, kẻo nó ghi đè lại.
+    func touchModeChanged(_ mode: TouchMode) { settingsWindow?.noteTouchMode(mode) }
     @objc private func toggleSeize() { controller.seize.toggle(); controller.start(); refresh() }
     @objc private func toggleDebug() { debugLog.toggle(); refresh() }
     @objc private func toggleLogin() {
