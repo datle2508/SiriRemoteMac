@@ -208,8 +208,8 @@ func filterLag(smooth: Double, speed: Double) -> Double {
 
 _ = loadMap()                    // đọc cấu hình thật (thanh trượt Nhận vuốt…) như app
 let path = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "touch.csv"
-let touchSpeedCfg = CommandLine.arguments.count > 2 ? Double(CommandLine.arguments[2]) ?? 0.77 : 0.77
-let smoothCfg = CommandLine.arguments.count > 3 ? Double(CommandLine.arguments[3]) ?? 0.76 : 0.76
+let touchSpeedCfg = CommandLine.arguments.count > 2 ? Double(CommandLine.arguments[2]) ?? touchSpeed : touchSpeed
+let smoothCfg = CommandLine.arguments.count > 3 ? Double(CommandLine.arguments[3]) ?? scrollSmooth : scrollSmooth
 let frames = load(path)
 let ss = sessions(frames)
 print("Bản ghi: \(frames.count) khung, \(ss.count) lượt chạm  (touchspeed \(touchSpeedCfg), độ mượt \(smoothCfg))")
@@ -331,8 +331,11 @@ do {
     }
     let oldRow = rows.first { $0.0 == 0.45 && $0.1 == 0.6 && $0.2 == 0.1 }!
     print("  bản trước: 0.45 s, 0.60 /s, 100 ms → vuốt lọt \(oldRow.3)/\(sw.count), giữ trung vị \(f(oldRow.4 * 1000, 0)) ms")
-    let curRow = rows.first { $0.0 == 0.45 && $0.1 == 0.6 && $0.2 == 0.135 }!
-    print("  hiện tại: 0.45 s, 0.60 /s, 135 ms → vuốt lọt \(curRow.3), giữ trung vị \(f(curRow.4 * 1000, 0)) ms, khựng \(f(curRow.6 * 100, 1)) %, nhảy \(curRow.7)")
+    // hiện tại = luật của app với thanh trượt Nhận vuốt trong cấu hình (tính thẳng, không tra lưới)
+    let curLeak = sw.filter { s in (steerDecision(s) ?? .infinity) < s.dur - 0.001 }.count
+    let curHolds = cur.compactMap { steerDecision($0) }
+    let curJ = avgJank { replayCursor($0, mode: .pump(smooth: smoothCfg, delay: 0.02), touchSpeed: touchSpeedCfg, hold: true, spread: true, glideN: 8) }   // như app: đuổi theo 8 gói
+    print("  hiện tại: \(f(GestureRules.holdMax)) s, \(f(GestureRules.slowSpeed(priority: swipePriority))) /s, \(f(GestureRules.holdMinTime * 1000, 0)) ms → vuốt lọt \(curLeak), giữ trung vị \(f(pct(curHolds, 0.5) * 1000, 0)) ms, khựng \(f(curJ.0 * 100, 1)) %, nhảy \(curJ.1)")
     // tốc độ sớm của cú vuốt
     for t in [0.045, 0.06, 0.075, 0.09] {
         let sv = sw.compactMap { s -> Double? in
